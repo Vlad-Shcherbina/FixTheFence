@@ -6,6 +6,7 @@ TIME_LIMIT = 8
 
 
 random.seed(1)
+num_changes = 0
 
 dirs = [(0, 1), (0, -1), (1, 0), (-1, 0)]
 
@@ -54,6 +55,20 @@ class Block(object):
         self.offset = offset
         self.w = w
         self.h = h
+
+        self.undo = []
+        self.best_score = self.get_score()
+
+    def update_best(self, score):
+        if self.best_score <= score:
+            self.best_score = score
+            self.undo = []
+
+    def undo_to_best(self):
+        m = self.m
+        for pt in self.undo:
+            m[pt] = not m[pt]
+        self.undo = []
 
     def get_subblock(self, x1, y1, x2, y2):
         assert 0 <= x1 <= x2 <= self.w
@@ -123,7 +138,31 @@ class Block(object):
                 result -= count + (c != cc) == g
         return result
 
+    def change(self, pt):
+        global num_changes
+        num_changes += 1
+        m = self.m
+        undo = self.undo
+
+        m[pt] = not m[pt]
+
+        if undo and undo[-1] == pt:
+            undo.pop()
+            return
+
+        undo.append(pt)
+        if len(undo) > self.w*self.h*3:
+            undo_set = set()
+            for pt in undo:
+                if pt in undo_set:
+                    undo_set.remove(pt)
+                else:
+                    undo_set.add(pt)
+            undo[:] = list(undo_set)
+
     def optimize(self, iterations, temperature=0):
+        score = self.get_score()
+
         if self.w * self.h == 0:
             return
         for i in xrange(iterations):
@@ -133,7 +172,9 @@ class Block(object):
             if self.can_change(pt):
                 d = self.score_diff(pt)
                 if d >= 0 or random.random() < temperature:
-                    self.m[pt] = not self.m[pt]
+                    self.change(pt)
+                    score += d
+                    self.update_best(score)
 
     def optimize_pairs(self, iterations, temperature=0):
         stride = self.stride
@@ -141,6 +182,9 @@ class Block(object):
             return
         if self.h <= 2:
             return
+
+        score = self.get_score()
+
         for i in xrange(iterations):
             pt = self.coords_to_index(
                 random.randrange(self.w-2)+1,
@@ -150,16 +194,18 @@ class Block(object):
                 random.shuffle(pts)
 
                 d1 = self.score_diff(pt)
-                self.m[pt] = not self.m[pt]
+                self.change(pt)
 
                 for pt2 in pts:
                     if self.can_change(pt2):
                         d2 = self.score_diff(pt2)
                         if d1 + d2 >= 0 or random.random() < temperature:
-                            self.m[pt2] = not self.m[pt2]
+                            self.change(pt2)
+                            score += d1+d2
+                            self.update_best(score)
                             break
                 else:
-                    self.m[pt] = not self.m[pt]
+                    self.change(pt)
 
 
 class FixTheFence(object):
@@ -168,8 +214,7 @@ class FixTheFence(object):
 
         h = len(diagram)
         w = len(diagram[0])
-        #m = [[False]*(w+2) for _ in range(h+2)]
-        #m[1][1] = True
+
         m = [False] * (w+2) * (h+2)
         m[1*(w+2) + 1] = True
 
@@ -192,13 +237,17 @@ class FixTheFence(object):
             if time.clock() - start > TIME_LIMIT:
                 break
             whole.optimize_pairs(w*h*3, 0.001)
-            #print>>sys.stderr, 's', whole.get_score()
             whole.optimize(w*h*2, 0.001)
-            #print>>sys.stderr, 'd', whole.get_score()
+
+        print>>sys.stderr, 'best', whole.best_score
+        print>>sys.stderr, 'current', whole.get_score()
+        whole.undo_to_best()
+        print>>sys.stderr, 'rewinded', whole.get_score()
 
         whole.optimize(w*h*4)
         whole.optimize_pairs(w*h*2)
-        #print>>sys.stderr, whole.get_score()
+        print>>sys.stderr, 'best', whole.best_score
+        print>>sys.stderr, 'final', whole.get_score()
 
         x, y, path = trace_matrix(whole.stride, whole.m)
         return '%s %s %s' % (y-1, x-1, path)
@@ -210,6 +259,7 @@ def main():
     lines = [raw_input().strip() for _ in range(size)]
     result = FixTheFence().findLoop(lines)
     print>>sys.stderr, 'it took', time.clock()-start
+    print>>sys.stderr, num_changes / (time.clock()-start), 'changes per second'
     print result
 
 
