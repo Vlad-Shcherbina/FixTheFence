@@ -2,7 +2,7 @@ import sys
 import random
 import time
 
-TIME_LIMIT = 8
+TIME_LIMIT = 9
 
 
 random.seed(1)
@@ -233,20 +233,21 @@ class FixTheFence(object):
             sub = whole.get_subblock(max(0, x-k), max(0, y-k), min(w, x+k), min(h, y+k))
             sub.optimize(k*k*k*10, temperature=0.1)
 
-        for i in xrange(1000):
+        k = 2
+        for i in xrange(10**9):
             if time.clock() - start > TIME_LIMIT:
                 break
-            whole.optimize_pairs(w*h*3, 0.001)
-            whole.optimize(w*h*2, 0.001)
 
-        print>>sys.stderr, 'best', whole.best_score
-        print>>sys.stderr, 'current', whole.get_score()
-        whole.undo_to_best()
-        print>>sys.stderr, 'rewinded', whole.get_score()
+            x = random.randrange(w)
+            y = random.randrange(h)
 
-        whole.optimize(w*h*4)
-        whole.optimize_pairs(w*h*2)
-        print>>sys.stderr, 'best', whole.best_score
+            sub = whole.get_subblock(max(0, x-k), max(0, y-k), min(w, x+k), min(h, y+k))
+            orig_score = sub.get_score()
+            sub.optimize(k*k*50, temperature=0.5)
+            sub.undo_to_best()
+            sub.optimize_pairs(k*k*10, temperature=0.5)
+            sub.undo_to_best()
+
         print>>sys.stderr, 'final', whole.get_score()
 
         x, y, path = trace_matrix(whole.stride, whole.m)
