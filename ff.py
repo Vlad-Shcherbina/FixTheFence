@@ -59,6 +59,13 @@ class Block(object):
         self.undo = []
         self.best_score = self.get_score()
 
+    @staticmethod
+    def make_empty(w, h):
+        m = [False] * (w+2)*(h+2)
+        m[w+3] = True
+        goal = [None] * (w+2)*(h+2)
+        return Block(m, goal, w+2, w+3, w, h)
+
     def update_best(self, score):
         if self.best_score <= score:
             self.best_score = score
@@ -92,22 +99,27 @@ class Block(object):
         if m[pt-1-stride] != m[pt-stride] == m[pt-1]: return False
         return m[pt-1] != m[pt+1] or m[pt-stride] != m[pt+stride]
 
+    def enum_points(self):
+        stride = self.stride
+        for y in range(self.h):
+            for pt in xrange(self.offset+stride*y, self.offset+stride*y+self.w):
+                yield pt
+
     def get_score(self):
         stride = self.stride
         m = self.m
         goal = self.goal
         result = 0
-        for y in range(self.h):
-            for pt in xrange(self.offset+stride*y, self.offset+stride*y+self.w):
-                c = m[pt]
-                g = goal[pt]
-                if g is not None:
-                    count = (
-                        (c != m[pt-1]) +
-                        (c != m[pt+1]) +
-                        (c != m[pt+stride]) +
-                        (c != m[pt-stride]))
-                    result += count == g
+        for pt in self.enum_points():
+            c = m[pt]
+            g = goal[pt]
+            if g is not None:
+                count = (
+                    (c != m[pt-1]) +
+                    (c != m[pt+1]) +
+                    (c != m[pt+stride]) +
+                    (c != m[pt-stride]))
+                result += count == g
         return result
 
     def score_diff(self, pt):
@@ -207,6 +219,57 @@ class Block(object):
                 else:
                     self.change(pt)
 
+    def show(self):
+        for y in range(self.h):
+            for x in range(self.w):
+                print>>sys.stderr, int(self.m[self.coords_to_index(x, y)]),
+            print>>sys.stderr, '   ',
+            for x in range(self.w):
+                g = self.goal[self.coords_to_index(x, y)]
+                if g is None:
+                    g = '-'
+                print>>sys.stderr, g,
+            print>>sys.stderr
+
+
+class FoundImprovement(Exception):
+    pass
+
+
+def search_local_improvement(block, depth):
+    def rec(x, y, score_diff, depth):
+        pt = block.coords_to_index(x, y)
+        if not block.can_change(pt):
+            return
+        score_diff += block.score_diff(pt)
+        block.change(pt)
+        if score_diff > 0:
+            raise FoundImprovement()
+        if depth > 0:
+            for dx in range(-1, 2):
+                for dy in range(-1, 2):
+                    if dx == dy == 0:
+                        continue
+                    if depth > 2 and random.random() > 0.2:
+                        continue
+                    x1 = x + dx
+                    y1 = y + dy
+                    if x1 < 0 or x1 >= block.w:
+                        continue
+                    if y1 < 0 or y1 >= block.h:
+                        continue
+                    rec(x1, y1, score_diff, depth-1)
+        block.change(pt)
+
+    improved = False
+    for y in range(block.h):
+        for x in range(block.w):
+            try:
+                rec(y, x, 0, depth)
+            except FoundImprovement:
+                improved = True
+    return improved
+
 
 class FixTheFence(object):
     def findLoop(self, diagram):
@@ -233,20 +296,33 @@ class FixTheFence(object):
             sub = whole.get_subblock(max(0, x-k), max(0, y-k), min(w, x+k), min(h, y+k))
             sub.optimize(k*k*k*10, temperature=0.1)
 
-        k = 2
-        for i in xrange(10**9):
+        level = 0
+        while True:
             if time.clock() - start > TIME_LIMIT:
                 break
+            print>>sys.stderr, level
+            sys.stderr.flush()
+            if search_local_improvement(whole, level):
+                level = 0
+                print>>sys.stderr, 'improved to', whole.get_score()
+            else:
+                level += 1
 
-            x = random.randrange(w)
-            y = random.randrange(h)
+        if False:
+            k = 2
+            for i in xrange(10**9):
+                if time.clock() - start > TIME_LIMIT:
+                    break
 
-            sub = whole.get_subblock(max(0, x-k), max(0, y-k), min(w, x+k), min(h, y+k))
-            orig_score = sub.get_score()
-            sub.optimize(k*k*50, temperature=0.5)
-            sub.undo_to_best()
-            sub.optimize_pairs(k*k*10, temperature=0.5)
-            sub.undo_to_best()
+                x = random.randrange(w)
+                y = random.randrange(h)
+
+                sub = whole.get_subblock(max(0, x-k), max(0, y-k), min(w, x+k), min(h, y+k))
+                orig_score = sub.get_score()
+                sub.optimize(k*k*50, temperature=0.5)
+                sub.undo_to_best()
+                sub.optimize_pairs(k*k*10, temperature=0.5)
+                sub.undo_to_best()
 
         print>>sys.stderr, 'final', whole.get_score()
 
