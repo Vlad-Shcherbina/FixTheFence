@@ -10,41 +10,53 @@ num_changes = 0
 
 dirs = [(0, 1), (0, -1), (1, 0), (-1, 0)]
 
-def trace_matrix(w, m):
-    assert len(m) % w == 0
-    h = len(m) / w
 
-    p0 = m.index(True)
-    y0, x0 = divmod(p0, w)
-    x = x0 + 1
-    y = y0
-    path = ['R']
-    while x != x0 or y != y0:
-        ul = x > 0 and y > 0 and m[(y-1)*w + x-1]
-        ur = x < w and y > 0 and m[(y-1)*w + x]
-        dl = x > 0 and y < h and m[y*w + x-1]
-        dr = x < w and y < h and m[y*w + x]
+def trace_path(block, pt, prev_d):
+    start = pt
 
-        if ul != ur and path[-1] != 'D':
+    m = block.m
+    stride = block.stride
+
+    up = -stride
+    down = stride
+    left = -1
+    right = 1
+
+    path = []
+    d = prev_d
+
+    while True:
+        ul = m[pt-stride-1]
+        ur = m[pt-stride]
+        dl = m[pt-1]
+        dr = m[pt]
+
+        assert not ul != ur != dr != dl
+
+        if ul != ur and d != down:
+            d = up
             path.append('U')
-            y -= 1
-            continue
-        if dl != dr and path[-1] != 'U':
+        elif dl != dr and d != up:
+            d = down
             path.append('D')
-            y += 1
-            continue
-        if ul != dl and path[-1] != 'R':
+        elif ul != dl and d != right:
+            d = left
             path.append('L')
-            x -= 1
-            continue
-        if ur != dr and path[-1] != 'L':
+        elif ur != dr and d != left:
+            d = right
             path.append('R')
-            x += 1
-            continue
+        else:
+            assert False
 
-        assert False
+        pt += d
+        if pt == start:
+            break
 
-    return x0, y0, ''.join(path)
+        y, x = divmod(pt-block.offset, block.stride)
+        if x < 0 or x > block.w or y < 0 or y > block.h:
+            break
+
+    return ''.join(path), pt
 
 
 class Block(object):
@@ -322,8 +334,14 @@ class FixTheFence(object):
 
         print>>sys.stderr, 'final', whole.get_score()
 
-        x, y, path = trace_matrix(whole.stride, whole.m)
-        return '%s %s %s' % (y-1, x-1, path)
+        for pt in whole.enum_points():
+            if whole.m[pt]:
+                y, x = divmod(pt-whole.offset, whole.stride)
+                path, finish = trace_path(whole, pt+1, 1)
+                assert finish == pt+1
+                return '%s %s %s' % (y, x+1, path)
+        else:
+            assert False, 'no stuff found'
 
 
 def main():
