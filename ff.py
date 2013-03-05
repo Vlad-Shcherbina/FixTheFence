@@ -278,16 +278,12 @@ class FixTheFence(object):
         h = len(diagram)
         w = len(diagram[0])
 
-        m = [False] * (w+2) * (h+2)
-        m[1*(w+2) + 1] = True
+        whole = Block.make_empty(w, h)
 
-        goal = [None] * (w+2) * (h+2)
         for x in range(w):
             for y in range(h):
                 if diagram[y][x] != '-':
-                    goal[(y+1)*(w+2) + x+1] = int(diagram[y][x])
-
-        whole = Block(m, goal, stride=w+2, offset=w+3, w=w, h=h)
+                    whole.goal[whole.coords_to_index(x, y)] = int(diagram[y][x])
 
         k = 7
         centers = [(x, y) for x in range(w) for y in range(h) if x%k == k-1 and y%k == k-1]
