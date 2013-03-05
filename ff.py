@@ -52,7 +52,7 @@ def trace_path(block, pt, prev_d):
         if pt == start:
             break
 
-        y, x = divmod(pt-block.offset, block.stride)
+        x, y = block.index_to_coords(pt)
         if x < 0 or x > block.w or y < 0 or y > block.h:
             break
 
@@ -101,6 +101,13 @@ class Block(object):
 
     def coords_to_index(self, x, y):
         return self.offset + self.stride*y + x
+
+    def index_to_coords(self, pt):
+        # plus one and minus one in order to get negative coords for points
+        # slightly to the left of the block
+        y, x = divmod(pt-self.offset+1, self.stride)
+        x -= 1
+        return x, y
 
     def can_change(self, pt):
         m = self.m
@@ -336,7 +343,7 @@ class FixTheFence(object):
 
         for pt in whole.enum_points():
             if whole.m[pt]:
-                y, x = divmod(pt-whole.offset, whole.stride)
+                x, y = whole.index_to_coords(pt)
                 path, finish = trace_path(whole, pt+1, 1)
                 assert finish == pt+1
                 return '%s %s %s' % (y, x+1, path)
