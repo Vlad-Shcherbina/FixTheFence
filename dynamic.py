@@ -251,26 +251,26 @@ class Propagator(object):
                     else:
                         gate = down_gate
                     if gate is not OUT:
-                        failed = True
+                        return
                 else:
                     assert 0 <= end < 100, end
                     assert topo[end] == 'global' or topo[end].startswith(']')
-                    failed = True
+                    return
             elif topo[y].startswith(']'):
                 counterpart = int(topo[y][1:])
                 end = trace(y)
                 if 0 <= end < 100:
                     if end != counterpart:
-                        failed = True
+                        return
                 elif 100 <= end < 200:
                     end2 = trace(counterpart)
                     if not 100 <= end2 < 200:
-                        failed = True
+                        return
                     else:
                         new_topo[end-100] = ']'+str(end2-100)
                         new_topo[end2-100] = ']'+str(end-100)
                 else:
-                    failed = True
+                    return
             else:
                 assert False
 
@@ -283,10 +283,9 @@ class Propagator(object):
             if gate is OUT:
                 if 0 <= end < 100:
                     if topo[end] != 'global':
-                        failed = True
+                        return
                 elif 100 <= end < 200:
                     if 'global' not in topo:
-                        failed = True
                         return
                     if start == UP_CONN:
                         g = topo.index('global')
@@ -297,22 +296,20 @@ class Propagator(object):
                         assert False
                     end2 = trace(g)
                     if not 100 <= end2 < 200:
-                        failed = True
                         return
                     new_topo[end-100] = ']'+str(end2-100)
                     new_topo[end2-100] = ']'+str(end-100)
                 else:
-                    failed = True
-                # TODO: global + out = ] + ]
+                    return
             elif gate is IN:
                 if 100 <= end < 200:
                     new_topo[end-100] = 'global'
                 else:
-                    failed = True
+                    return
             elif gate is BARRIER:
                 assert up_gate == down_gate == BARRIER
                 if 'global' in topo:
-                    failed = True
+                    return
                 other_start = UP_CONN + DOWN_CONN - start
                 other_end = trace(other_start)
                 if end == other_start:
@@ -322,9 +319,9 @@ class Propagator(object):
                         new_topo[end-100] = ']'+str(other_end-100)
                         new_topo[other_end-100] = ']'+str(end-100)
                     else:
-                        failed = True
+                        return
                 else:
-                    failed = True
+                    return
 
         for y in range(self.h+1):
             if y+100 not in conn_dict:
@@ -337,7 +334,7 @@ class Propagator(object):
         # prevent cycles
         for y in range(self.h+1):
             if topo[y] is not None and topo[y].startswith('[') and y not in visited:
-                failed = True
+                return
 
         if not failed:
             assert 'uninitialized' not in new_topo
