@@ -490,9 +490,9 @@ def dynamic(block):
 
                 qcost, _ = states[x+1].get(new_state, (-10e10, None))
                 if new_cost > qcost:
-                    states[x+1][new_state] = (new_cost, sol+(xor_bits,))
+                    states[x+1][new_state] = (new_cost, (sol, xor_bits))
 
-    for (topo, bonus, penalty), (cost, solution) in states[block.w+1].items():
+    for (topo, bonus, penalty), (cost, sol) in states[block.w+1].items():
         if topo == finish_topo:
             # TODO: right goals
 
@@ -502,6 +502,12 @@ def dynamic(block):
             if block.m[block.coords_to_index(-1, -1)]:
                 bits ^= (4 << block.h) - 1
             #print bin(bits)[::-1]
+
+            solution = []
+            while sol != ():
+                sol, x = sol
+                solution.append(x)
+            solution.reverse()
             for x, xor_bits in enumerate(solution):
                 bits ^= xor_bits
                 #print bin(bits)[::-1]
