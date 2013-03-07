@@ -284,8 +284,26 @@ class Propagator(object):
                 if 0 <= end < 100:
                     if topo[end] != 'global':
                         failed = True
+                elif 100 <= end < 200:
+                    if 'global' not in topo:
+                        failed = True
+                        return
+                    if start == UP_CONN:
+                        g = topo.index('global')
+                    elif start == DOWN_CONN:
+                        g = len(topo) - 1 - topo[::-1].index('global')
+                        assert topo[g] == 'global'
+                    else:
+                        assert False
+                    end2 = trace(g)
+                    if not 100 <= end2 < 200:
+                        failed = True
+                        return
+                    new_topo[end-100] = ']'+str(end2-100)
+                    new_topo[end2-100] = ']'+str(end-100)
                 else:
                     failed = True
+                # TODO: global + out = ] + ]
             elif gate is IN:
                 if 100 <= end < 200:
                     new_topo[end-100] = 'global'
@@ -360,6 +378,8 @@ def num_bits(n):
     return cnt
 
 
+prop_cache = {}
+
 def dynamic(block):
     print>>sys.stderr, 'dynamic for block'
     block.show()
@@ -382,10 +402,12 @@ def dynamic(block):
             else:
                 finish_topo[y] = 'global'
 
-    print>>sys.stderr, 'start topo', start_topo
-    print>>sys.stderr, 'finish topo', finish_topo
+    #print>>sys.stderr, 'start topo', start_topo
+    #print>>sys.stderr, 'finish topo', finish_topo
 
-    prop = Propagator(block.h)
+    prop = prop_cache.get(block.h)
+    if prop is None:
+        prop = prop_cache[block.h] = Propagator(block.h)
 
     start_topo = prop.topo_index[tuple(start_topo)]
     finish_topo = prop.topo_index[tuple(finish_topo)]
@@ -427,7 +449,7 @@ def dynamic(block):
                 down_gate = BARRIER
 
         for (topo, bonus, penalty), (cost, sol) in states[x].items():
-            print x, prop.index_topo[topo], bin(bonus)[::-1], bin(penalty)[::-1], cost
+            #print x, prop.index_topo[topo], bin(bonus)[::-1], bin(penalty)[::-1], cost
             zzz = prop.transition_table[topo].get((up_gate, down_gate), {})
             for xor_bits, new_topo in zzz.items():
                 new_cost = cost
@@ -447,24 +469,24 @@ def dynamic(block):
 
                 bits = prop.bits_from_topo(prop.index_topo[topo])
                 new_bits = bits ^ xor_bits
-                print '   ', bin(bits)[::-1], bin(new_bits)[::-1]
+                #print '   ', bin(bits)[::-1], bin(new_bits)[::-1]
                 for y in range(block.h):
                     pt = block.coords_to_index(x, y)
                     g = block.goal[pt]
-                    print '  ', g
+                    #print '  ', g
                     if g is not None:
                         d = new_bits ^ (new_bits << 1)
 
                         num_neighbors = bool(d & (2 << y)) + bool(d & (4 << y))
                         num_neighbors += bool(xor_bits & (2 << y))
-                        print '   num neibgs', num_neighbors
+                        #print '   num neibgs', num_neighbors
                         if num_neighbors+1 == g:
                             new_bonus |= 2 << y
                         elif num_neighbors == g:
                             new_penalty |= 2 << y
 
                 new_state = new_topo, new_bonus, new_penalty
-                print '  ->', bin(xor_bits)[::-1], prop.index_topo[new_topo], bin(new_bonus)[::-1], bin(new_penalty)[::-1], new_cost
+                #print '  ->', bin(xor_bits)[::-1], prop.index_topo[new_topo], bin(new_bonus)[::-1], bin(new_penalty)[::-1], new_cost
 
                 qcost, _ = states[x+1].get(new_state, (-10e10, None))
                 if new_cost > qcost:
@@ -474,15 +496,15 @@ def dynamic(block):
         if topo == finish_topo:
             # TODO: right goals
 
-            print 'reached'
-            print prop.index_topo[topo], bin(bonus)[::-1], bin(penalty)[::-1], cost
+            #print 'reached'
+            #print prop.index_topo[topo], bin(bonus)[::-1], bin(penalty)[::-1], cost
             bits = prop.bits_from_topo(prop.index_topo[start_topo])
             if block.m[block.coords_to_index(-1, -1)]:
                 bits ^= (4 << block.h) - 1
-            print bin(bits)[::-1]
+            #print bin(bits)[::-1]
             for x, xor_bits in enumerate(solution):
                 bits ^= xor_bits
-                print bin(bits)[::-1]
+                #print bin(bits)[::-1]
                 for y in range(block.h):
                     desired = bool(bits & (2 << y))
                     pt = block.coords_to_index(x, y)
@@ -490,7 +512,7 @@ def dynamic(block):
                     if block.m[pt] != desired:
                         block.change(pt)
 
-            print 'optimized block:'
+            #print 'optimized block:'
             block.show()
             break
     else:
