@@ -241,7 +241,10 @@ class Block(object):
     def show(self):
         for y in range(self.h):
             for x in range(self.w):
-                print>>sys.stderr, int(self.m[self.coords_to_index(x, y)]),
+                if self.m[self.coords_to_index(x, y)]:
+                    print>>sys.stderr, '*',
+                else:
+                    print>>sys.stderr, '.',
             print>>sys.stderr, '   ',
             for x in range(self.w):
                 g = self.goal[self.coords_to_index(x, y)]
