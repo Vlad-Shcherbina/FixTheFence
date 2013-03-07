@@ -455,14 +455,6 @@ def dynamic(block):
                 new_cost += num_bits(xor_bits & bonus)
                 new_cost += num_bits((~xor_bits) & penalty)
 
-                # TODO: up and down goals.
-
-                #for y in range(block.h):
-                #    pt = block.coords_to_index(x-1, y)
-                #    if block.goal[pt] is not None:
-                #        num_goals += 1
-                #new_cost += num_goals -
-
                 new_bonus = 0
                 new_penalty = 0
 
@@ -483,6 +475,28 @@ def dynamic(block):
                             new_bonus |= 2 << y
                         elif num_neighbors == g:
                             new_penalty |= 2 << y
+
+                # up and down goals
+                pt = block.coords_to_index(x, -1)
+                g = block.goal[pt]
+                if g is not None:
+                    num_neighbors = bool(xor_bits & 1)
+                    num_neighbors += bool(block.m[pt] != block.m[pt-block.stride])
+                    num_neighbors += bool((new_bits ^ (new_bits >> 1)) & 1)
+                    if num_neighbors+1 == g:
+                        new_bonus |= 1
+                    elif num_neighbors == g:
+                        new_penalty |= 1
+                pt = block.coords_to_index(x, block.h)
+                g = block.goal[pt]
+                if g is not None:
+                    num_neighbors = bool(xor_bits & (2 << block.h))
+                    num_neighbors += bool(block.m[pt] != block.m[pt+block.stride])
+                    num_neighbors += bool((new_bits ^ (new_bits << 1)) & (2 << block.h))
+                    if num_neighbors+1 == g:
+                        new_bonus |= 1
+                    elif num_neighbors == g:
+                        new_penalty |= 1
 
                 new_state = new_topo, new_bonus, new_penalty
                 #print '  ->', bin(xor_bits)[::-1], prop.index_topo[new_topo], bin(new_bonus)[::-1], bin(new_penalty)[::-1], new_cost
