@@ -2,6 +2,8 @@ import sys
 import random
 import time
 
+import dynamic
+
 TIME_LIMIT = 9
 
 
@@ -307,24 +309,35 @@ class FixTheFence(object):
                 if diagram[y][x] != '-':
                     whole.goal[whole.coords_to_index(x, y)] = int(diagram[y][x])
 
-        k = 7
-        centers = [(x, y) for x in range(w) for y in range(h) if x%k == k-1 and y%k == k-1]
-        centers.sort(key=sum)
-        for x, y in centers:
-            sub = whole.get_subblock(max(0, x-k), max(0, y-k), min(w, x+k), min(h, y+k))
-            sub.optimize(k*k*k*10, temperature=0.1)
+        whole.change(whole.coords_to_index(0, 0))
+        for y in range(h):
+            whole.change(whole.coords_to_index(x/2, y))
 
-        level = 0
-        while True:
-            if time.clock() - start > TIME_LIMIT:
-                break
-            print>>sys.stderr, level
-            sys.stderr.flush()
-            if search_local_improvement(whole, level):
-                level = 0
-                print>>sys.stderr, 'improved to', whole.get_score()
-            else:
-                level += 1
+        for y in range(0, whole.h, 7):
+            print>>sys.stderr, 'y=', y
+            if y+6 <= whole.h:
+                block = whole.get_subblock(0, y, whole.w, y+6)
+                dynamic.dynamic(block)
+
+        if False:
+            k = 7
+            centers = [(x, y) for x in range(w) for y in range(h) if x%k == k-1 and y%k == k-1]
+            centers.sort(key=sum)
+            for x, y in centers:
+                sub = whole.get_subblock(max(0, x-k), max(0, y-k), min(w, x+k), min(h, y+k))
+                sub.optimize(k*k*k*10, temperature=0.1)
+
+            level = 0
+            while True:
+                if time.clock() - start > TIME_LIMIT:
+                    break
+                print>>sys.stderr, level
+                sys.stderr.flush()
+                if search_local_improvement(whole, level):
+                    level = 0
+                    print>>sys.stderr, 'improved to', whole.get_score()
+                else:
+                    level += 1
 
         if False:
             k = 2
