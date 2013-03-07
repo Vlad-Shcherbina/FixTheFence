@@ -113,6 +113,7 @@ class Propagator(object):
 
         self.topo_index = {}
         self.index_topo = []
+        self.topo_bits = []
         def rec(topo, stack):
             if len(topo) == self.h+1:
                 if stack == []:
@@ -128,6 +129,7 @@ class Propagator(object):
                     assert topo not in self.topo_index
                     self.topo_index[topo] = len(self.topo_index)
                     self.index_topo.append(topo)
+                    self.topo_bits.append(self.bits_from_topo(topo))
                 return
             rec(topo+[None], stack)
             if stack == []:
@@ -464,7 +466,7 @@ def dynamic(block):
                 new_bonus = 0
                 new_penalty = 0
 
-                bits = prop.bits_from_topo(prop.index_topo[topo])
+                bits = prop.topo_bits[topo]
                 new_bits = bits ^ xor_bits
                 #print '   ', bin(bits)[::-1], bin(new_bits)[::-1]
                 for y in range(block.h):
