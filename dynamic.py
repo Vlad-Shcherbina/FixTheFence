@@ -393,6 +393,7 @@ def dynamic(block):
     states = []
     states.append({(start_topo, start_bonus, start_penalty): (0, ())})
     for x in range(block.w+1):
+        #print>>sys.stderr, x, len(states[-1])
         states.append({})
 
         up_gate = down_gate = None
@@ -504,12 +505,13 @@ def dynamic(block):
             break
     else:
         assert False
+    #print>>sys.stderr, 'dynamic done'
 
 
 def checked_dynamic(block):
     dynamic(block)
     q = copy.deepcopy(block)
-    impr = any(search_local_improvement(q, depth) for depth in range(12))
+    impr = any(search_local_improvement(q, depth) for depth in range(8))
     if impr:
         assert q.get_score() > block.get_score()
         print>>sys.stderr, 'dyn', block.get_score()
@@ -531,13 +533,13 @@ if __name__ == '__main__':
         print 'seed', seed
         seed += 1
 
-        whole = Block.make_empty(8, 4)
+        whole = Block.make_empty(10, 9)
         whole.change(whole.coords_to_index(0, 0))
 
         params = 0.5, 1, 1, 1, 0.5
-        randomize_block_goal(whole.get_subblock(0, 0, whole.w-1, whole.h), *params)
+        randomize_block_goal(whole.get_subblock(0, 0, whole.w-2, whole.h), *params)
 
-        block = whole.get_subblock(1, 1, whole.w-1, whole.h-1)
+        block = whole.get_subblock(2, 2, whole.w-2, whole.h-2)
         block.change(block.coords_to_index(0, 0))
 
 
