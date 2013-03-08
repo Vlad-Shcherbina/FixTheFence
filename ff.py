@@ -543,7 +543,7 @@ def num_bits(n):
 
 prop_cache = {}
 
-def dynamic(block):
+def dynamic(block, end_time=None):
     initial_score = block.get_score()
 
     paths = compute_paths(block)
@@ -596,6 +596,8 @@ def dynamic(block):
     states = []
     states.append({(start_topo, start_bonus, start_penalty): (0, ())})
     for x in range(block.w+1):
+        if end_time is not None and time.clock() > end_time:
+            return
         states.append({})
 
         up_gate = down_gate = None
@@ -793,7 +795,7 @@ class FixTheFence(object):
                 if time.clock() > start + TIME_LIMIT:
                     break
                 sub = whole.get_subblock(0, y, whole.w, y+strip_width)
-                dynamic(sub)
+                dynamic(sub, end_time=start + TIME_LIMIT)
             whole.transpose()
             transposed = not transposed
 
@@ -811,6 +813,9 @@ class FixTheFence(object):
                 x, y = whole.index_to_coords(pt)
                 path, finish = trace_path(whole, pt+1, 1)
                 assert finish == pt+1
+
+                overtime = time.clock() - (start+TIME_LIMIT)
+                #assert overtime < 0.5, overtime
                 return '%s %s %s' % (y, x+1, path)
         else:
             assert False, 'no stuff found'
