@@ -211,6 +211,17 @@ class Block(object):
                 print>>sys.stderr, g,
             print>>sys.stderr
 
+    def transpose(self):
+        assert self.w == self.h
+        m = self.m
+        goal = self.goal
+        for x in range(-1, self.w+1):
+            for y in range(-1, x):
+                pt1 = self.coords_to_index(x, y)
+                pt2 = self.coords_to_index(y, x)
+                m[pt1], m[pt2] = m[pt2], m[pt1]
+                goal[pt1], goal[pt2] = goal[pt2], goal[pt1]
+
 
 class FixTheFence(object):
     def findLoop(self, diagram):
@@ -226,20 +237,45 @@ class FixTheFence(object):
                 if diagram[y][x] != '-':
                     whole.goal[whole.coords_to_index(x, y)] = int(diagram[y][x])
 
+
         whole.change(whole.coords_to_index(0, 0))
         for y in range(h):
             whole.change(whole.coords_to_index(x/2, y))
 
         strip_width = 4
-        for y in range(0, whole.h, strip_width+1) + range(2, whole.h, strip_width+1):
-            print>>sys.stderr, 'y =', y
-            if y+strip_width <= whole.h:
-                block = whole.get_subblock(0, y, whole.w, y+strip_width)
-                print>>sys.stderr, whole.get_score(), '->',
-                dynamic.checked_dynamic(block)
-            print>>sys.stderr, whole.get_score()
 
-        print>>sys.stderr, 'final', whole.get_score()
+
+        transposed = False
+        for i in xrange(10**6):
+            if time.clock() > start + TIME_LIMIT:
+                break
+            print>>sys.stderr, '---'
+            offset = 0
+            if i < 2:
+                offset = 0
+            elif i < 4:
+                offset = whole.h % strip_width
+                if offset == 0:
+                    offset = random.randrage(1, strip.width)
+            else:
+                offset = random.randrange(strip_width)
+            for y in range(offset, whole.h-strip_width+1, strip_width):
+                if time.clock() > start + TIME_LIMIT:
+                    break
+                #print>>sys.stderr, y, y+strip_width
+                sub = whole.get_subblock(0, y, whole.w, y+strip_width)
+                dynamic.dynamic(sub)
+            whole.transpose()
+            transposed = not transposed
+
+        if transposed:
+            whole.transpose()
+
+        score = whole.get_score()
+        print>>sys.stderr, 'final', score
+        total_goals = sum(1 for g in whole.goal if g is not None)
+        if total_goals > 0:
+            print>>sys.stderr, 'score:', 1.0*whole.get_score()/total_goals
 
         for pt in whole.enum_points():
             if whole.m[pt]:
