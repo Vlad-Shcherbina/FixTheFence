@@ -7,6 +7,8 @@ from sampling import *
 from simple_solvers import *
 
 
+PRINT_GRAPH = False
+
 
 random.seed(1)
 
@@ -456,7 +458,8 @@ def dynamic(block):
                 down_gate = BARRIER
 
         for (topo, bonus, penalty), (cost, sol) in states[x].items():
-            #print x, prop.index_topo[topo], bin(bonus)[::-1], bin(penalty)[::-1], cost
+            if PRINT_GRAPH:
+                print>>sys.stderr, x, prop.index_topo[topo], bin(bonus)[::-1], bin(penalty)[::-1], cost
             zzz = prop.transition_table[topo].get((up_gate, down_gate), {})
             for xor_bits, new_topo in zzz.items():
                 new_cost = cost
@@ -503,8 +506,12 @@ def dynamic(block):
                     elif num_neighbors == g:
                         new_penalty |= 2 << block.h
 
+                if x == block.w and new_topo != finish_topo:
+                    continue
+
                 new_state = new_topo, new_bonus, new_penalty
-                #print '  ->', bin(xor_bits)[::-1], prop.index_topo[new_topo], bin(new_bonus)[::-1], bin(new_penalty)[::-1], new_cost
+                if PRINT_GRAPH:
+                    print>>sys.stderr, '  ->', bin(xor_bits)[::-1], prop.index_topo[new_topo], bin(new_bonus)[::-1], bin(new_penalty)[::-1], new_cost
 
                 qcost, _ = states[x+1].get(new_state, (-10e10, None))
                 if new_cost > qcost:
@@ -546,57 +553,53 @@ def dynamic(block):
 def checked_dynamic(block):
     dynamic(block)
     q = copy.deepcopy(block)
-    improve_by_levels(q, time.clock()+10)
-    if q.get_score() > block.get_score():
-        print 'dyn', block.get_score()
+    impr = any(search_local_improvement(q, depth) for depth in range(12))
+    if impr:
+        assert q.get_score() > block.get_score()
+        print>>sys.stderr, 'dyn', block.get_score()
         block.show()
-        print 'improved', q.get_score()
+        print>>sys.stderr, 'improved', q.get_score()
         q.show()
         assert False
+    else:
+        assert q.get_score() == block.get_score()
 
 
 if __name__ == '__main__':
 
-    #prop = Propagator(7)
-    #print len(prop.topo_index)
-    #cnt = 0
-    #for t in prop.transition_table:
-    #    for gg in t:
-    #        cnt += len(t[gg])
-    #print cnt
-    #exit()
     sys.stdout = sys.stderr
+    seed = 109
+    while True:
+        print '------------'
+        random.seed(seed)
+        print 'seed', seed
+        seed += 1
 
-    whole = Block.make_empty(30, 6)
-    whole.change(whole.coords_to_index(0, 0))
+        whole = Block.make_empty(8, 4)
+        whole.change(whole.coords_to_index(0, 0))
 
-    params = 0.5, 1, 1, 1, 0.5
-    randomize_block_goal(whole.get_subblock(0, 0, whole.w-1, whole.h), *params)
+        params = 0.5, 1, 1, 1, 0.5
+        randomize_block_goal(whole.get_subblock(0, 0, whole.w-1, whole.h), *params)
 
-    block = whole.get_subblock(1, 1, whole.w-1, whole.h-1)
-    block.change(block.coords_to_index(0, 0))
+        block = whole.get_subblock(1, 1, whole.w-1, whole.h-1)
+        block.change(block.coords_to_index(0, 0))
 
 
-    for _ in range(30):
-        for pt in whole.enum_points():
-            if whole.can_change(pt) and random.random() < 0.5:
-                whole.change(pt)
+        for _ in range(30):
+            for pt in whole.enum_points():
+                if whole.can_change(pt) and random.random() < 0.5:
+                    whole.change(pt)
 
-    whole.show()
+        whole.show()
 
-    print>>sys.stderr
+        print>>sys.stderr
 
-    backup = copy.deepcopy(whole)
+        backup = copy.deepcopy(whole)
 
-    checked_dynamic(block)
+        checked_dynamic(block)
 
-    print 'full solution', whole.get_score()
-    whole.show()
+        print 'full solution', whole.get_score()
+        whole.show()
 
-    print 'we wanted to solve', backup.get_score()
-    backup.show()
-
-    #print trace_path(whole, whole.coords_to_index(2, 0), 1)
-
-    #time.sleep(0.01)
-    #print trace_path(block, block.coords_to_index(0, 0), -block.stride)
+        print 'we wanted to solve', backup.get_score()
+        backup.show()
