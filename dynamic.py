@@ -483,22 +483,7 @@ def dynamic(block):
                 new_cost += num_bits(xor_bits & bonus)
                 new_cost += num_bits((~xor_bits) & penalty)
 
-                new_bonus = 0
-                new_penalty = 0
-
                 new_bits = bits ^ xor_bits
-                for y in range(block.h):
-                    pt = block.coords_to_index(x, y)
-                    g = block.goal[pt]
-                    if g is not None:
-                        d = new_bits ^ (new_bits << 1)
-
-                        num_neighbors = bool(d & (2 << y)) + bool(d & (4 << y))
-                        num_neighbors += bool(xor_bits & (2 << y))
-                        if num_neighbors+1 == g:
-                            new_bonus |= 2 << y
-                        elif num_neighbors == g:
-                            new_penalty |= 2 << y
 
                 neib_up = new_bits ^ (new_bits << 1)
                 neib_down = new_bits ^ (new_bits >> 1)
@@ -516,11 +501,8 @@ def dynamic(block):
                 n1 = (n1 & ~neib_down) | (n0 & neib_down)
                 n0 &= ~neib_down
 
-                new_bonus_ = (n0 & goal1) | (n1 & goal2) | (n2 & goal3)
-                new_penalty_ = (n0 & goal0) | (n1 & goal1) | (n2 & goal2) | (n3 & goal3)
-
-                assert new_bonus_ == new_bonus
-                assert new_penalty_ == new_penalty
+                new_bonus = (n0 & goal1) | (n1 & goal2) | (n2 & goal3)
+                new_penalty = (n0 & goal0) | (n1 & goal1) | (n2 & goal2) | (n3 & goal3)
 
                 new_state = new_topo, new_bonus, new_penalty
                 if PRINT_GRAPH:
