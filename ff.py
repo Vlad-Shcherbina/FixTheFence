@@ -597,6 +597,8 @@ def dynamic(block, end_time=None):
             elif g == num_neighbors+1:
                 start_bonus |= 1 << (y+1)
 
+    num_bits_ = map(num_bits, range(4 << block.h))
+
     states = []
     states.append({(start_topo, start_bonus, start_penalty): (0, ())})
     for x in range(block.w+1):
@@ -686,19 +688,21 @@ def dynamic(block, end_time=None):
                 if not ((bits ^ (bits >> 1)) & (1 << block.h)):
                     cost += 1
 
+            bad_entry = (-1000000, None)
+
             zzz = prop.transition_table[topo].get((up_gate, down_gate), {})
             for xor_bits, new_topo in zzz.items():
                 if x == block.w and new_topo != finish_topo:
                     continue
 
                 new_cost = cost
-                new_cost += num_bits(xor_bits & bonus)
-                new_cost += num_bits((~xor_bits) & penalty)
+                new_cost += num_bits_[xor_bits & bonus]
+                new_cost += num_bits_[~xor_bits & penalty]
 
                 new_bits = bits ^ xor_bits
 
                 neib_up = new_bits ^ (new_bits << 1)
-                neib_down = new_bits ^ (new_bits >> 1)
+                neib_down = neib_up >> 1
                 neib_left = xor_bits
 
                 n0 = ~neib_left
@@ -721,7 +725,7 @@ def dynamic(block, end_time=None):
                     print>>sys.stderr, '  ->', bin(xor_bits)[::-1], prop.index_topo[new_topo], bin(new_bonus)[::-1], bin(new_penalty)[::-1], new_cost
 
                 num_transitions += 1
-                qcost, _ = states[x+1].get(new_state, (-10e10, None))
+                qcost = states[x+1].get(new_state, bad_entry)[0]
                 if new_cost > qcost:
                     states[x+1][new_state] = (new_cost, (sol, xor_bits))
 
