@@ -351,129 +351,6 @@ class Propagator(object):
 
         return tuple(new_topo)
 
-    def next_topo_ugly(self, topo, connections, up_gate=None, down_gate=None):
-        conn_dict = dict(connections + map(reversed, connections))
-
-        visited = set()
-
-        def trace(q):
-            q = conn_dict[q]
-            if 0 <= q < 100 and topo[q].startswith('['):
-                qq = int(topo[q][1:])
-                #assert qq not in visited
-                visited.add(qq)
-                return trace(qq)
-            else:
-                return q
-
-        new_topo = ['uninitialized'] * (self.h+1)
-
-        failed = False
-        for y in range(self.h+1):
-            if topo[y] is None or topo[y].startswith('['):
-                pass
-            elif topo[y] == 'global':
-                end = trace(y)
-                if 100 <= end < 200:
-                    new_topo[end-100] = 'global'
-                elif end in [UP_CONN, DOWN_CONN]:
-                    yy = {UP_CONN: up_gate, 999: down_gate}[end]
-                    if end == UP_CONN:
-                        gate = up_gate
-                    else:
-                        gate = down_gate
-                    if gate is not OUT:
-                        return
-                else:
-                    assert 0 <= end < 100, end
-                    assert topo[end] == 'global' or topo[end].startswith(']')
-                    return
-            elif topo[y].startswith(']'):
-                counterpart = int(topo[y][1:])
-                end = trace(y)
-                if 0 <= end < 100:
-                    if end != counterpart:
-                        return
-                elif 100 <= end < 200:
-                    end2 = trace(counterpart)
-                    if not 100 <= end2 < 200:
-                        return
-                    else:
-                        new_topo[end-100] = ']'+str(end2-100)
-                        new_topo[end2-100] = ']'+str(end-100)
-                else:
-                    return
-            else:
-                assert False
-
-        for start, gate in (UP_CONN, up_gate), (DOWN_CONN, down_gate):
-            if gate is None:
-                assert start not in conn_dict
-                continue
-            end = trace(start)
-            #print 'trace', start, end
-            if gate is OUT:
-                if 0 <= end < 100:
-                    if topo[end] != 'global':
-                        return
-                elif 100 <= end < 200:
-                    if 'global' not in topo:
-                        return
-                    if start == UP_CONN:
-                        g = topo.index('global')
-                    elif start == DOWN_CONN:
-                        g = len(topo) - 1 - topo[::-1].index('global')
-                        assert topo[g] == 'global'
-                    else:
-                        assert False
-                    end2 = trace(g)
-                    if not 100 <= end2 < 200:
-                        return
-                    new_topo[end-100] = ']'+str(end2-100)
-                    new_topo[end2-100] = ']'+str(end-100)
-                else:
-                    return
-            elif gate is IN:
-                if 100 <= end < 200:
-                    new_topo[end-100] = 'global'
-                else:
-                    return
-            elif gate is BARRIER:
-                assert up_gate == down_gate == BARRIER
-                if 'global' in topo:
-                    return
-                other_start = UP_CONN + DOWN_CONN - start
-                other_end = trace(other_start)
-                if end == other_start:
-                    assert start == other_end
-                elif 100 <= end < 200:
-                    if 100 <= other_end < 200:
-                        new_topo[end-100] = ']'+str(other_end-100)
-                        new_topo[other_end-100] = ']'+str(end-100)
-                    else:
-                        return
-                else:
-                    return
-
-        for y in range(self.h+1):
-            if y+100 not in conn_dict:
-                new_topo[y] = None
-            else:
-                end = trace(y+100)
-                if 100 <= end < 200:
-                    new_topo[end-100] = '['+str(y)
-
-        # prevent cycles
-        for y in range(self.h+1):
-            if topo[y] is not None and topo[y].startswith('[') and y not in visited:
-                return
-
-        if not failed:
-            assert 'uninitialized' not in new_topo
-            return tuple(new_topo)
-        else:
-            return None
-
     def enumerate_transitions(self, topo):
         bits = self.bits_from_topo(topo)
         gate_pairs = [
@@ -490,17 +367,7 @@ class Propagator(object):
                 if not bits_compatible(bits, new_bits):
                     continue
                 conns = self.get_connections(bits, new_bits)
-                new_topo_ugly = self.next_topo_ugly(topo, conns, up_gate, down_gate)
                 new_topo = self.next_topo(topo, conns, up_gate, down_gate)
-
-                if new_topo_ugly not in self.topo_index:
-                    new_topo_ugly = None
-
-                if new_topo_ugly != new_topo:
-                    #print>>sys.stderr, topo, bin(xor_bits)[::-1], GATE_NAME[up_gate], GATE_NAME[down_gate]
-                    #print>>sys.stderr, '  ', new_topo_ugly
-                    #print>>sys.stderr, '  ', new_topo
-                    assert new_topo_ugly is None
 
                 if new_topo is not None:
                     yield (xor_bits, up_gate, down_gate), new_topo
