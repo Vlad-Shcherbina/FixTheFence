@@ -343,12 +343,12 @@ class Propagator(object):
         assert 0 <= next_bits <= 4 << self.h
         assert bits_compatible(prev_bits, next_bits)
 
-        UL = 0b0111
-        UR = 0b0100
-        DL = 0b0010
-        DR = 0b0001
-        HOR = 0b0011
-        VER = 0b0101
+        UL = 7 # 0b0111
+        UR = 4 # 0b0100
+        DL = 2 # 0b0010
+        DR = 1 # 0b0001
+        HOR = 3 # 0b0011
+        VER = 5 # 0b0101
 
         if (prev_bits ^ next_bits) & 1:
             z = UP_CONN
@@ -357,11 +357,11 @@ class Propagator(object):
 
         connections = []
         for y in range(self.h+1):
-            mask = ((prev_bits >> y) & 1) * (0b0111)
+            mask = ((prev_bits >> y) & 1) * 7  # 0b0111
             mask ^= ((next_bits >> y) & 1) << 2
             mask ^= ((prev_bits >> (y+1)) & 1) << 1
             mask ^= ((next_bits >> (y+1)) & 1) << 0
-            assert mask not in [0b0110, 0b1001]
+            assert mask not in [6, 9]  # [0b0110, 0b1001]
 
             if mask == VER:
                 assert z is not None
@@ -786,7 +786,7 @@ class FixTheFence(object):
             elif i < 4:
                 offset = whole.h % strip_width
                 if offset == 0:
-                    offset = random.randrage(1, strip.width)
+                    offset = random.randrange(1, strip_width)
             else:
                 offset = random.randrange(strip_width)
             for y in range(offset, whole.h-strip_width+1, strip_width):
