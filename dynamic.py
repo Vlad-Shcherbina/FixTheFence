@@ -440,6 +440,22 @@ def dynamic(block):
             elif num_neighbors == g:
                 down_penalty = True
 
+        goal0 = 0
+        goal1 = 0
+        goal2 = 0
+        goal3 = 0
+        for y in range(block.h):
+            pt = block.coords_to_index(x, y)
+            g = block.goal[pt]
+            if g == 0:
+                goal0 |= 2 << y
+            elif g == 1:
+                goal1 |= 2 << y
+            elif g == 2:
+                goal2 |= 2 << y
+            elif g == 3:
+                goal3 |= 2 << y
+
         for (topo, bonus, penalty), (cost, sol) in states[x].items():
             if PRINT_GRAPH:
                 print>>sys.stderr, x, prop.index_topo[topo], bin(bonus)[::-1], bin(penalty)[::-1], cost
@@ -483,6 +499,28 @@ def dynamic(block):
                             new_bonus |= 2 << y
                         elif num_neighbors == g:
                             new_penalty |= 2 << y
+
+                neib_up = new_bits ^ (new_bits << 1)
+                neib_down = new_bits ^ (new_bits >> 1)
+                neib_left = xor_bits
+
+                n0 = ~neib_left
+                n1 = neib_left
+
+                n2 = n1 & neib_up
+                n1 = (n1 & ~neib_up) | (n0 & neib_up)
+                n0 &= ~neib_up
+
+                n3 = n2 & neib_down
+                n2 = (n2 & ~neib_down) | (n1 & neib_down)
+                n1 = (n1 & ~neib_down) | (n0 & neib_down)
+                n0 &= ~neib_down
+
+                new_bonus_ = (n0 & goal1) | (n1 & goal2) | (n2 & goal3)
+                new_penalty_ = (n0 & goal0) | (n1 & goal1) | (n2 & goal2) | (n3 & goal3)
+
+                assert new_bonus_ == new_bonus
+                assert new_penalty_ == new_penalty
 
                 new_state = new_topo, new_bonus, new_penalty
                 if PRINT_GRAPH:
