@@ -333,7 +333,13 @@ def num_bits(n):
 prop_cache = {}
 
 def dynamic(block):
+    initial_score = block.get_score()
+
     paths = compute_paths(block)
+
+    if len(paths) == 0:
+        print>>sys.stderr, 'dynamic: block with no paths'
+        return
 
     start_topo = [None]*(block.h+1)
     finish_topo = [None]*(block.h+1)
@@ -530,6 +536,10 @@ def dynamic(block):
             break
     else:
         assert False
+
+    delta = block.get_score() - initial_score
+    print>>sys.stderr, 'delta', delta
+    assert delta >= 0
 
 
 def checked_dynamic(block):
