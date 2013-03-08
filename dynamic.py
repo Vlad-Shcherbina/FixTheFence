@@ -66,6 +66,7 @@ GATE_NAME = {None: None, IN: 'IN', OUT: 'OUT', BARRIER: 'BARRIER'}
 
 class Propagator(object):
     def __init__(self, h):
+        start = time.clock()
         self.h = h
 
         self.topo_index = {}
@@ -74,7 +75,7 @@ class Propagator(object):
         def rec(topo, stack):
             if len(topo) == self.h+1:
                 if stack == []:
-                    # TODO: fix opening brackets
+                    # fix opening brackets
                     topo = topo[:]
                     for i, e in enumerate(topo):
                         if e is not None and len(e) > 1:
@@ -99,17 +100,22 @@ class Propagator(object):
                 rec(topo+[']'], stack+[']'+str(len(topo))])
         rec([], [])
 
+        cnt = 0
         self.transition_table = []
         for index, topo in enumerate(self.index_topo):
+            if index % 100 == 0:
+                print>>sys.stderr, 100*index/len(self.index_topo), '%'
             t = {}
             self.transition_table.append(t)
             for (xor_bits, up_gate, down_gate), new_topo in self.enumerate_transitions(topo):
-                #if (up_gate, down_gate) not in t:
                 tt = t.setdefault((up_gate, down_gate), {})
                 assert xor_bits not in tt
                 tt[xor_bits] = self.topo_index[new_topo]
+                cnt += 1
 
-        print>>sys.stderr, 'Propagator(%d) created' % self.h
+        print>>sys.stderr, 'Propagator(%d) initialization took %s' % (self.h, time.clock() - start)
+        print>>sys.stderr, len(self.index_topo), 'topos'
+        print>>sys.stderr, cnt, 'transitions'
 
     def bits_from_topo(self, topo):
         result = 0
