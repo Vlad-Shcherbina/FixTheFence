@@ -414,11 +414,55 @@ def dynamic(block):
             else:
                 down_gate = BARRIER
 
+        # up and down goals
+        up_bonus = False
+        up_penalty = False
+        pt = block.coords_to_index(x-1, -1)
+        g = block.goal[pt]
+        if g is not None:
+            num_neighbors = bool(block.m[pt] != block.m[pt-1])
+            num_neighbors += bool(block.m[pt] != block.m[pt+1])
+            num_neighbors += bool(block.m[pt] != block.m[pt-block.stride])
+            if num_neighbors+1 == g:
+                up_bonus = True
+            elif num_neighbors == g:
+                up_penalty = True
+        down_bonus = False
+        down_penalty = False
+        pt = block.coords_to_index(x-1, block.h)
+        g = block.goal[pt]
+        if g is not None:
+            num_neighbors = bool(block.m[pt] != block.m[pt-1])
+            num_neighbors += bool(block.m[pt] != block.m[pt+1])
+            num_neighbors += bool(block.m[pt] != block.m[pt+block.stride])
+            if num_neighbors+1 == g:
+                down_bonus = True
+            elif num_neighbors == g:
+                down_penalty = True
+
         for (topo, bonus, penalty), (cost, sol) in states[x].items():
             if PRINT_GRAPH:
                 print>>sys.stderr, x, prop.index_topo[topo], bin(bonus)[::-1], bin(penalty)[::-1], cost
+
+            bits = prop.topo_bits[topo]
+            if up_bonus:
+                if (bits ^ (bits >> 1)) & 1:
+                    cost += 1
+            elif up_penalty:
+                if not ((bits ^ (bits >> 1)) & 1):
+                    cost += 1
+            if down_bonus:
+                if (bits ^ (bits >> 1)) & (1 << block.h):
+                    cost += 1
+            elif down_penalty:
+                if not ((bits ^ (bits >> 1)) & (1 << block.h)):
+                    cost += 1
+
             zzz = prop.transition_table[topo].get((up_gate, down_gate), {})
             for xor_bits, new_topo in zzz.items():
+                if x == block.w and new_topo != finish_topo:
+                    continue
+
                 new_cost = cost
                 new_cost += num_bits(xor_bits & bonus)
                 new_cost += num_bits((~xor_bits) & penalty)
@@ -426,7 +470,6 @@ def dynamic(block):
                 new_bonus = 0
                 new_penalty = 0
 
-                bits = prop.topo_bits[topo]
                 new_bits = bits ^ xor_bits
                 for y in range(block.h):
                     pt = block.coords_to_index(x, y)
@@ -440,31 +483,6 @@ def dynamic(block):
                             new_bonus |= 2 << y
                         elif num_neighbors == g:
                             new_penalty |= 2 << y
-
-                # up and down goals
-                pt = block.coords_to_index(x, -1)
-                g = block.goal[pt]
-                if g is not None:
-                    num_neighbors = bool(xor_bits & 1)
-                    num_neighbors += bool(block.m[pt] != block.m[pt-block.stride])
-                    num_neighbors += bool((new_bits ^ (new_bits >> 1)) & 1)
-                    if num_neighbors+1 == g:
-                        new_bonus |= 1
-                    elif num_neighbors == g:
-                        new_penalty |= 1
-                pt = block.coords_to_index(x, block.h)
-                g = block.goal[pt]
-                if g is not None:
-                    num_neighbors = bool(xor_bits & (2 << block.h))
-                    num_neighbors += bool(block.m[pt] != block.m[pt+block.stride])
-                    num_neighbors += bool((new_bits ^ (new_bits << 1)) & (2 << block.h))
-                    if num_neighbors+1 == g:
-                        new_bonus |= 2 << block.h
-                    elif num_neighbors == g:
-                        new_penalty |= 2 << block.h
-
-                if x == block.w and new_topo != finish_topo:
-                    continue
 
                 new_state = new_topo, new_bonus, new_penalty
                 if PRINT_GRAPH:
