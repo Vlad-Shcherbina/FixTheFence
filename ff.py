@@ -1,9 +1,13 @@
 import sys
 import random
 import time
+import StringIO
 
+#sys.stderr = StringIO.StringIO()
 
-TIME_LIMIT = 9
+STRIP_WIDTH = 4
+
+TIME_LIMIT = 9.5
 
 PRINT_GRAPH = False
 
@@ -774,9 +778,6 @@ class FixTheFence(object):
         for y in range(h):
             whole.change(whole.coords_to_index(x/2, y))
 
-        strip_width = 4
-
-
         transposed = False
         for i in xrange(10**6):
             if time.clock() > start + TIME_LIMIT:
@@ -786,15 +787,18 @@ class FixTheFence(object):
             if i < 2:
                 offset = 0
             elif i < 4:
-                offset = whole.h % strip_width
+                offset = whole.h % STRIP_WIDTH
                 if offset == 0:
-                    offset = random.randrange(1, strip_width)
+                    offset = random.randrange(1, STRIP_WIDTH)
             else:
-                offset = random.randrange(strip_width)
-            for y in range(offset, whole.h-strip_width+1, strip_width):
+                offset = random.randrange(STRIP_WIDTH)
+            rng = range(offset, whole.h-STRIP_WIDTH+1, STRIP_WIDTH)
+            if random.random() < 0.5:
+                rng = reversed(rng)
+            for y in rng:
                 if time.clock() > start + TIME_LIMIT:
                     break
-                sub = whole.get_subblock(0, y, whole.w, y+strip_width)
+                sub = whole.get_subblock(0, y, whole.w, y+STRIP_WIDTH)
                 dynamic(sub, end_time=start + TIME_LIMIT)
             whole.transpose()
             transposed = not transposed
