@@ -187,7 +187,6 @@ class Propagator(object):
         return connections
 
     def next_topo(self, topo, connections, up_gate=None, down_gate=None):
-        #print '-----------'
         conn_dict = dict(connections + map(reversed, connections))
         visited = set()
         def trace(q):
@@ -195,7 +194,6 @@ class Propagator(object):
             if 0 <= q < 100 and topo[q].startswith('['):
                 visited.add(q)
                 qq = int(topo[q][1:])
-                #assert qq not in visited
                 visited.add(qq)
                 return trace(qq)
             else:
@@ -228,8 +226,6 @@ class Propagator(object):
         elif down_gate is BARRIER:
             topo[DOWN_CONN] = ']'+str(UP_CONN)
 
-        #print 'topo with gates:', sorted(topo.items())
-
         new_topo = ['uninitialized'] * (self.h+1)
         for start, gate in topo.items():
             if gate is None or gate.startswith('['):
@@ -253,7 +249,6 @@ class Propagator(object):
                             return
                         assert end < counterpart_end
 
-                        #print 'ends', end, counterpart_end
                         orig = end
                         i = end+1
                         while True:
@@ -285,7 +280,6 @@ class Propagator(object):
                             orig = i
                             i = i+1
 
-        #print 'filling the rest', new_topo
         for y in range(self.h+1):
             if new_topo[y] != 'uninitialized':
                 continue
@@ -296,12 +290,9 @@ class Propagator(object):
                 if not 100 <= end < 200:
                     return
                 new_topo[y] = '['+str(end-100)
-        #print 'filled'
-        # prevent cycles
         for y in range(self.h+1):
             if topo[y] is not None and topo[y].startswith('[') and y not in visited:
                 return
-        #print 'no cycles'
 
         assert 'uninitialized' not in new_topo
         for y in range(self.h+1):
@@ -342,8 +333,6 @@ def num_bits(n):
 prop_cache = {}
 
 def dynamic(block):
-    #print>>sys.stderr, 'dynamic for block'
-    #block.show()
     paths = compute_paths(block)
 
     start_topo = [None]*(block.h+1)
@@ -362,9 +351,6 @@ def dynamic(block):
                 finish_topo[y] = '[' + str(end_y)
             else:
                 finish_topo[y] = 'global'
-
-    #print>>sys.stderr, 'start topo', start_topo
-    #print>>sys.stderr, 'finish topo', finish_topo
 
     prop = prop_cache.get(block.h)
     if prop is None:
@@ -393,7 +379,6 @@ def dynamic(block):
     states = []
     states.append({(start_topo, start_bonus, start_penalty): (0, ())})
     for x in range(block.w+1):
-        #print>>sys.stderr, x, len(states[-1])
         states.append({})
 
         up_gate = down_gate = None
@@ -456,7 +441,11 @@ def dynamic(block):
             elif g == 3:
                 goal3 |= 2 << y
 
+        num_states = 0
+        num_transitions = 0
+
         for (topo, bonus, penalty), (cost, sol) in states[x].items():
+            num_states += 1
             if PRINT_GRAPH:
                 print>>sys.stderr, x, prop.index_topo[topo], bin(bonus)[::-1], bin(penalty)[::-1], cost
 
@@ -508,20 +497,22 @@ def dynamic(block):
                 if PRINT_GRAPH:
                     print>>sys.stderr, '  ->', bin(xor_bits)[::-1], prop.index_topo[new_topo], bin(new_bonus)[::-1], bin(new_penalty)[::-1], new_cost
 
+                num_transitions += 1
                 qcost, _ = states[x+1].get(new_state, (-10e10, None))
                 if new_cost > qcost:
                     states[x+1][new_state] = (new_cost, (sol, xor_bits))
 
+        #print>>sys.stderr, '%s(%s)'%(num_states, num_transitions),
+    #print>>sys.stderr
+
+    assert len(states[block.w+1]) == 1
     for (topo, bonus, penalty), (cost, sol) in states[block.w+1].items():
         if topo == finish_topo:
             # TODO: right goals
 
-            #print 'reached'
-            #print prop.index_topo[topo], bin(bonus)[::-1], bin(penalty)[::-1], cost
             bits = prop.bits_from_topo(prop.index_topo[start_topo])
             if block.m[block.coords_to_index(-1, -1)]:
                 bits ^= (4 << block.h) - 1
-            #print bin(bits)[::-1]
 
             solution = []
             while sol != ():
@@ -530,20 +521,15 @@ def dynamic(block):
             solution.reverse()
             for x, xor_bits in enumerate(solution):
                 bits ^= xor_bits
-                #print bin(bits)[::-1]
                 for y in range(block.h):
                     desired = bool(bits & (2 << y))
                     pt = block.coords_to_index(x, y)
 
                     if block.m[pt] != desired:
                         block.change(pt)
-
-            #print 'optimized block:'
-            #block.show()
             break
     else:
         assert False
-    #print>>sys.stderr, 'dynamic done'
 
 
 def checked_dynamic(block):
