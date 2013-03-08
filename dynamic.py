@@ -50,54 +50,6 @@ def compute_paths(block):
     return paths
 
 
-def generate_crossings(block, paths):
-    crossings = []
-    for y in range(block.h+1):
-        x = -1
-        if (x, y) in paths:
-            end_x, end_y = paths[x, y]
-            if end_x >= 0:
-                crossings.append(((x, y), (end_x, end_y)))
-            else:
-                assert end_x == x
-    yield crossings[:]
-    for x in range(block.w+1):
-        y = -1
-        if (x, y) in paths:
-            end_x, end_y = paths[x, y]
-            if end_x < x:
-                assert crossings[0] == ((end_x, end_y), (x, y))
-                crossings.pop(0)
-            elif end_x > x:
-                crossings.insert(0, ((x, y), (end_x, end_y)))
-            else:
-                assert crossings == []
-
-        y = block.h+1
-        if (x, y) in paths:
-            end_x, end_y = paths[x, y]
-            if end_x < x:
-                assert crossings[-1] == ((end_x, end_y), (x, y))
-                crossings.pop()
-            elif end_x > x:
-                crossings.append(((x, y), (end_x, end_y)))
-            else:
-                assert crossings == []
-
-        yield crossings[:]
-
-    for y in range(block.h+1):
-        x = block.w+1
-        if (x, y) in paths:
-            end_x, end_y = paths[x, y]
-            if end_x < x:
-                assert crossings[0] == ((end_x, end_y), (x, y))
-                crossings.pop(0)
-            else:
-                assert end_x == x
-    assert crossings == []
-
-
 def bits_compatible(bits1, bits2):
     return not bool(
         (bits1 ^ bits2) &
