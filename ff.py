@@ -3,6 +3,7 @@ import random
 import time
 
 import dynamic
+from simple_solvers import *
 
 TIME_LIMIT = 9
 
@@ -193,53 +194,6 @@ class Block(object):
                     undo_set.add(pt)
             undo[:] = list(undo_set)
 
-    def optimize(self, iterations, temperature=0):
-        score = self.get_score()
-
-        if self.w * self.h == 0:
-            return
-        for i in xrange(iterations):
-            pt = self.coords_to_index(
-                random.randrange(self.w),
-                random.randrange(self.h))
-            if self.can_change(pt):
-                d = self.score_diff(pt)
-                if d >= 0 or random.random() < temperature:
-                    self.change(pt)
-                    score += d
-                    self.update_best(score)
-
-    def optimize_pairs(self, iterations, temperature=0):
-        stride = self.stride
-        if self.w <= 2:
-            return
-        if self.h <= 2:
-            return
-
-        score = self.get_score()
-
-        for i in xrange(iterations):
-            pt = self.coords_to_index(
-                random.randrange(self.w-2)+1,
-                random.randrange(self.h-2)+1)
-            if self.can_change(pt):
-                pts = [pt-1, pt+1, pt-stride, pt+stride]
-                random.shuffle(pts)
-
-                d1 = self.score_diff(pt)
-                self.change(pt)
-
-                for pt2 in pts:
-                    if self.can_change(pt2):
-                        d2 = self.score_diff(pt2)
-                        if d1 + d2 >= 0 or random.random() < temperature:
-                            self.change(pt2)
-                            score += d1+d2
-                            self.update_best(score)
-                            break
-                else:
-                    self.change(pt)
-
     def show(self):
         for y in range(self.h):
             for x in range(self.w):
@@ -254,45 +208,6 @@ class Block(object):
                     g = '-'
                 print>>sys.stderr, g,
             print>>sys.stderr
-
-
-class FoundImprovement(Exception):
-    pass
-
-
-def search_local_improvement(block, depth):
-    def rec(x, y, score_diff, depth):
-        pt = block.coords_to_index(x, y)
-        if not block.can_change(pt):
-            return
-        score_diff += block.score_diff(pt)
-        block.change(pt)
-        if score_diff > 0:
-            raise FoundImprovement()
-        if depth > 0:
-            for dx in range(-1, 2):
-                for dy in range(-1, 2):
-                    if dx == dy == 0:
-                        continue
-                    if depth > 2 and random.random() > 0.2:
-                        continue
-                    x1 = x + dx
-                    y1 = y + dy
-                    if x1 < 0 or x1 >= block.w:
-                        continue
-                    if y1 < 0 or y1 >= block.h:
-                        continue
-                    rec(x1, y1, score_diff, depth-1)
-        block.change(pt)
-
-    improved = False
-    for y in range(block.h):
-        for x in range(block.w):
-            try:
-                rec(y, x, 0, depth)
-            except FoundImprovement:
-                improved = True
-    return improved
 
 
 class FixTheFence(object):
@@ -313,47 +228,14 @@ class FixTheFence(object):
         for y in range(h):
             whole.change(whole.coords_to_index(x/2, y))
 
-        for y in range(0, whole.h, 7):
-            print>>sys.stderr, 'y=', y
-            if y+6 <= whole.h:
-                block = whole.get_subblock(0, y, whole.w, y+6)
+        strip_width = 3
+        for y in range(0, whole.h, strip_width+1):
+            print>>sys.stderr, 'y =', y
+            if y+strip_width <= whole.h:
+                block = whole.get_subblock(0, y, whole.w, y+strip_width)
+                print>>sys.stderr, whole.get_score(), '->',
                 dynamic.dynamic(block)
-
-        if False:
-            k = 7
-            centers = [(x, y) for x in range(w) for y in range(h) if x%k == k-1 and y%k == k-1]
-            centers.sort(key=sum)
-            for x, y in centers:
-                sub = whole.get_subblock(max(0, x-k), max(0, y-k), min(w, x+k), min(h, y+k))
-                sub.optimize(k*k*k*10, temperature=0.1)
-
-            level = 0
-            while True:
-                if time.clock() - start > TIME_LIMIT:
-                    break
-                print>>sys.stderr, level
-                sys.stderr.flush()
-                if search_local_improvement(whole, level):
-                    level = 0
-                    print>>sys.stderr, 'improved to', whole.get_score()
-                else:
-                    level += 1
-
-        if False:
-            k = 2
-            for i in xrange(10**9):
-                if time.clock() - start > TIME_LIMIT:
-                    break
-
-                x = random.randrange(w)
-                y = random.randrange(h)
-
-                sub = whole.get_subblock(max(0, x-k), max(0, y-k), min(w, x+k), min(h, y+k))
-                orig_score = sub.get_score()
-                sub.optimize(k*k*50, temperature=0.5)
-                sub.undo_to_best()
-                sub.optimize_pairs(k*k*10, temperature=0.5)
-                sub.undo_to_best()
+            print>>sys.stderr, whole.get_score()
 
         print>>sys.stderr, 'final', whole.get_score()
 
