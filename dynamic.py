@@ -1,8 +1,10 @@
 import random
 import copy
+import time
 
 from ff import *
 from sampling import *
+from simple_solvers import *
 
 
 
@@ -151,6 +153,8 @@ class Propagator(object):
                 tt = t.setdefault((up_gate, down_gate), {})
                 assert xor_bits not in tt
                 tt[xor_bits] = self.topo_index[new_topo]
+
+        print>>sys.stderr, 'Propagator(%d) created' % self.h
 
     def bits_from_topo(self, topo):
         result = 0
@@ -380,8 +384,8 @@ def num_bits(n):
 prop_cache = {}
 
 def dynamic(block):
-    print>>sys.stderr, 'dynamic for block'
-    block.show()
+    #print>>sys.stderr, 'dynamic for block'
+    #block.show()
     paths = compute_paths(block)
 
     start_topo = [None]*(block.h+1)
@@ -413,16 +417,20 @@ def dynamic(block):
 
     start_bonus = 0
     start_penalty = 0
-    #for y in range(block.h):
-    #    pt = block.coords_to_index(-1, y)
-    #    g = block.goal[pt]
-    #    if g is not None:
-    #        num_neighbors = (
-    #            (block.goal[pt] == block.goal[pt-1])+
-    #            (block.goal[pt] == block.goal[pt-block.stride])+
-    #            (block.goal[pt] == block.goal[pt+block.stride]))
-    #        if g == num_neighbors:
 
+    # left goals
+    for y in range(-1, block.h+1):
+        pt = block.coords_to_index(-1, y)
+        g = block.goal[pt]
+        if g is not None:
+            num_neighbors = (
+                (block.m[pt] != block.m[pt-1])+
+                (block.m[pt] != block.m[pt-block.stride])+
+                (block.m[pt] != block.m[pt+block.stride]))
+            if g == num_neighbors:
+                start_penalty |= 1 << (y+1)
+            elif g == num_neighbors+1:
+                start_bonus |= 1 << (y+1)
 
     states = []
     states.append({(start_topo, start_bonus, start_penalty): (0, ())})
@@ -460,17 +468,14 @@ def dynamic(block):
 
                 bits = prop.topo_bits[topo]
                 new_bits = bits ^ xor_bits
-                #print '   ', bin(bits)[::-1], bin(new_bits)[::-1]
                 for y in range(block.h):
                     pt = block.coords_to_index(x, y)
                     g = block.goal[pt]
-                    #print '  ', g
                     if g is not None:
                         d = new_bits ^ (new_bits << 1)
 
                         num_neighbors = bool(d & (2 << y)) + bool(d & (4 << y))
                         num_neighbors += bool(xor_bits & (2 << y))
-                        #print '   num neibgs', num_neighbors
                         if num_neighbors+1 == g:
                             new_bonus |= 2 << y
                         elif num_neighbors == g:
@@ -494,9 +499,9 @@ def dynamic(block):
                     num_neighbors += bool(block.m[pt] != block.m[pt+block.stride])
                     num_neighbors += bool((new_bits ^ (new_bits << 1)) & (2 << block.h))
                     if num_neighbors+1 == g:
-                        new_bonus |= 1
+                        new_bonus |= 2 << block.h
                     elif num_neighbors == g:
-                        new_penalty |= 1
+                        new_penalty |= 2 << block.h
 
                 new_state = new_topo, new_bonus, new_penalty
                 #print '  ->', bin(xor_bits)[::-1], prop.index_topo[new_topo], bin(new_bonus)[::-1], bin(new_penalty)[::-1], new_cost
@@ -532,10 +537,23 @@ def dynamic(block):
                         block.change(pt)
 
             #print 'optimized block:'
-            block.show()
+            #block.show()
             break
     else:
         assert False
+
+
+def checked_dynamic(block):
+    dynamic(block)
+    q = copy.deepcopy(block)
+    improve_by_levels(q, time.clock()+10)
+    if q.get_score() > block.get_score():
+        print 'dyn', block.get_score()
+        block.show()
+        print 'improved', q.get_score()
+        q.show()
+        assert False
+
 
 if __name__ == '__main__':
 
@@ -549,16 +567,17 @@ if __name__ == '__main__':
     #exit()
     sys.stdout = sys.stderr
 
-    whole = Block.make_empty(20, 6)
+    whole = Block.make_empty(30, 6)
     whole.change(whole.coords_to_index(0, 0))
+
+    params = 0.5, 1, 1, 1, 0.5
+    randomize_block_goal(whole.get_subblock(0, 0, whole.w-1, whole.h), *params)
 
     block = whole.get_subblock(1, 1, whole.w-1, whole.h-1)
     block.change(block.coords_to_index(0, 0))
 
-    params = 0.5, 1, 1, 1, 0.5
-    randomize_block_goal(block, *params)
 
-    for _ in range(10):
+    for _ in range(30):
         for pt in whole.enum_points():
             if whole.can_change(pt) and random.random() < 0.5:
                 whole.change(pt)
@@ -569,7 +588,8 @@ if __name__ == '__main__':
 
     backup = copy.deepcopy(whole)
 
-    dynamic(block)
+    checked_dynamic(block)
+
     print 'full solution', whole.get_score()
     whole.show()
 

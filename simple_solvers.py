@@ -1,4 +1,6 @@
 import random
+import time
+import sys
 
 
 def optimize(block, iterations, temperature=0):
@@ -68,7 +70,7 @@ def search_local_improvement(block, depth):
                 for dy in range(-1, 2):
                     if dx == dy == 0:
                         continue
-                    if depth > 2 and random.random() > 0.2:
+                    if depth > 2 and random.random() > 0.8:
                         continue
                     x1 = x + dx
                     y1 = y + dy
@@ -83,7 +85,7 @@ def search_local_improvement(block, depth):
     for y in range(block.h):
         for x in range(block.w):
             try:
-                rec(y, x, 0, depth)
+                rec(x, y, 0, depth)
             except FoundImprovement:
                 improved = True
     return improved
@@ -108,6 +110,8 @@ def anneal(whole, end_time):
 
 def improve_by_levels(whole, end_time):
     k = 7
+    w = whole.w
+    h = whole.h
     centers = [(x, y) for x in range(w) for y in range(h) if x%k == k-1 and y%k == k-1]
     centers.sort(key=sum)
     for x, y in centers:

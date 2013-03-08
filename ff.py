@@ -132,16 +132,18 @@ class Block(object):
         m = self.m
         goal = self.goal
         result = 0
-        for pt in self.enum_points():
-            c = m[pt]
-            g = goal[pt]
-            if g is not None:
-                count = (
-                    (c != m[pt-1]) +
-                    (c != m[pt+1]) +
-                    (c != m[pt+stride]) +
-                    (c != m[pt-stride]))
-                result += count == g
+        for x in range(-1, self.w+1):
+            for y in range(-1, self.h+1):
+                pt = self.coords_to_index(x, y)
+                g = goal[pt]
+                if g is not None:
+                    c = m[pt]
+                    count = (
+                        (c != m[pt-1]) +
+                        (c != m[pt+1]) +
+                        (c != m[pt+stride]) +
+                        (c != m[pt-stride]))
+                    result += count == g
         return result
 
     def score_diff(self, pt):
@@ -228,13 +230,13 @@ class FixTheFence(object):
         for y in range(h):
             whole.change(whole.coords_to_index(x/2, y))
 
-        strip_width = 3
-        for y in range(0, whole.h, strip_width+1):
+        strip_width = 4
+        for y in range(0, whole.h, strip_width+1) + range(2, whole.h, strip_width+1):
             print>>sys.stderr, 'y =', y
             if y+strip_width <= whole.h:
                 block = whole.get_subblock(0, y, whole.w, y+strip_width)
                 print>>sys.stderr, whole.get_score(), '->',
-                dynamic.dynamic(block)
+                dynamic.checked_dynamic(block)
             print>>sys.stderr, whole.get_score()
 
         print>>sys.stderr, 'final', whole.get_score()
