@@ -5,6 +5,8 @@ import StringIO
 
 #sys.stderr = StringIO.StringIO()
 
+BENCHMARK = True
+
 STRIP_WIDTH = 4
 
 TIME_LIMIT = 9.5
@@ -13,7 +15,8 @@ STATE_CUTOFF = 10000
 
 PRINT_GRAPH = False
 
-
+if BENCHMARK:
+    TIME_LIMIT = 1e10
 
 random.seed(1)
 num_changes = 0
@@ -809,7 +812,7 @@ class FixTheFence(object):
             whole.change(whole.coords_to_index(x/2, y))
 
         transposed = False
-        for i in xrange(10**6):
+        for i in xrange(4 if BENCHMARK else 10**6):
             if time.clock() > start + TIME_LIMIT:
                 break
             print>>sys.stderr, '---'
@@ -823,7 +826,7 @@ class FixTheFence(object):
             else:
                 offset = random.randrange(STRIP_WIDTH)
             rng = range(offset, whole.h-STRIP_WIDTH+1, STRIP_WIDTH)
-            if random.random() < 0.5:
+            if not BENCHMARK and random.random() < 0.5:
                 rng = reversed(rng)
             for y in rng:
                 if time.clock() > start + TIME_LIMIT:
