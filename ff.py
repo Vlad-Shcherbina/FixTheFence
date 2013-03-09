@@ -317,6 +317,7 @@ class Propagator(object):
 
         cnt = 0
         self.transition_table = []
+        self.back_transitions = [{} for _ in self.index_topo]
         for index, topo in enumerate(self.index_topo):
             if index % 100 == 0:
                 print>>sys.stderr, 100*index/len(self.index_topo), '%'
@@ -326,6 +327,9 @@ class Propagator(object):
                 tt = t.setdefault((up_gate, down_gate), {})
                 assert xor_bits not in tt
                 tt[xor_bits] = self.topo_index[new_topo]
+
+                tt = self.back_transitions[self.topo_index[new_topo]].setdefault((up_gate, down_gate), [])
+                tt.append(index)
                 cnt += 1
 
         print>>sys.stderr, 'Propagator(%d) initialization took %s' % (self.h, time.clock() - start)
@@ -599,13 +603,8 @@ def dynamic(block, end_time=None):
 
     num_bits_ = map(num_bits, range(4 << block.h))
 
-    states = []
-    states.append({(start_topo, start_bonus, start_penalty): (0, ())})
+    gate_pairs = {}
     for x in range(block.w+1):
-        if end_time is not None and time.clock() > end_time:
-            return
-        states.append({})
-
         up_gate = down_gate = None
         if (x, -1) in paths:
             end_x, end_y = paths[x, -1]
@@ -623,6 +622,25 @@ def dynamic(block, end_time=None):
                 down_gate = IN
             else:
                 down_gate = BARRIER
+        gate_pairs[x] = (up_gate, down_gate)
+
+    reachable = [None] * (block.w+1)
+    reachable[block.w] = set([finish_topo])
+    for x in reversed(range(block.w)):
+        s = reachable[x] = set()
+        for t in reachable[x+1]:
+            s.update(prop.back_transitions[t].get(gate_pairs[x+1], []))
+    #for x in range(block.w+1):
+    #    print len(reachable[x]),
+    #print
+    #raw_input()
+
+    states = []
+    states.append({(start_topo, start_bonus, start_penalty): (0, ())})
+    for x in range(block.w+1):
+        if end_time is not None and time.clock() > end_time:
+            return
+        states.append({})
 
         # up and down goals
         up_bonus = False
@@ -690,9 +708,9 @@ def dynamic(block, end_time=None):
 
             bad_entry = (-1000000, None)
 
-            zzz = prop.transition_table[topo].get((up_gate, down_gate), {})
+            zzz = prop.transition_table[topo].get(gate_pairs[x], {})
             for xor_bits, new_topo in zzz.items():
-                if x == block.w and new_topo != finish_topo:
+                if new_topo not in reachable[x]:
                     continue
 
                 new_cost = cost
