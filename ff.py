@@ -556,7 +556,7 @@ def num_bits(n):
 
 prop_cache = {}
 
-def dynamic(block, end_time=None):
+def dynamic(block, sameness_bonus=0.001, end_time=None):
     initial_score = block.get_score()
 
     paths = compute_paths(block)
@@ -647,6 +647,12 @@ def dynamic(block, end_time=None):
             return []
         states.append({})
 
+        status_quo_xor_bits = 0
+        for y in range(-1, block.h+1):
+            pt = block.coords_to_index(x, y)
+            if block.m[pt-1] != block.m[pt]:
+                status_quo_xor_bits |= 1 << (y+1)
+
         # up and down goals
         up_bonus = False
         up_penalty = False
@@ -721,6 +727,9 @@ def dynamic(block, end_time=None):
                 new_cost = cost
                 new_cost += num_bits_[xor_bits & bonus]
                 new_cost += num_bits_[~xor_bits & penalty]
+
+                if xor_bits == status_quo_xor_bits:
+                    new_cost += sameness_bonus
 
                 new_bits = bits ^ xor_bits
 
