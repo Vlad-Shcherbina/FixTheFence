@@ -9,6 +9,8 @@ STRIP_WIDTH = 4
 
 TIME_LIMIT = 9.5
 
+STATE_CUTOFF = 10000
+
 PRINT_GRAPH = False
 
 
@@ -747,10 +749,14 @@ def dynamic(block, end_time=None):
                 if new_cost > qcost:
                     states[x+1][new_state] = (new_cost, (sol, xor_bits))
 
+        qq = states[x+1].items()
+        qq.sort(key=lambda e: -e[1][0])
+        qq = qq[:STATE_CUTOFF]
+        states[x+1] = dict(qq)
         #print>>sys.stderr, '%s(%s)'%(num_states, num_transitions),
     #print>>sys.stderr
 
-    assert len(states[block.w+1]) == 1
+    #assert len(states[block.w+1]) == 1
     for (topo, bonus, penalty), (cost, sol) in states[block.w+1].items():
         if topo == finish_topo:
             # TODO: right goals
@@ -774,6 +780,8 @@ def dynamic(block, end_time=None):
                         block.change(pt)
             break
     else:
+        print>>sys.stderr, 'crucial states were truncated :('
+        return
         assert False
 
     delta = block.get_score() - initial_score
