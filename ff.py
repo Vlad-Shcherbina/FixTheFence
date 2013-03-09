@@ -563,7 +563,7 @@ def dynamic(block, end_time=None):
 
     if len(paths) == 0:
         print>>sys.stderr, 'dynamic: block with no paths'
-        return
+        return []
 
     start_topo = [None]*(block.h+1)
     finish_topo = [None]*(block.h+1)
@@ -644,7 +644,7 @@ def dynamic(block, end_time=None):
     states.append({(start_topo, start_bonus, start_penalty): (0, ())})
     for x in range(block.w+1):
         if end_time is not None and time.clock() > end_time:
-            return
+            return []
         states.append({})
 
         # up and down goals
@@ -759,6 +759,8 @@ def dynamic(block, end_time=None):
         #print>>sys.stderr, '%s(%s)'%(num_states, num_transitions),
     #print>>sys.stderr
 
+    changed = []
+
     #assert len(states[block.w+1]) == 1
     for (topo, bonus, penalty), (cost, sol) in states[block.w+1].items():
         if topo == finish_topo:
@@ -781,17 +783,20 @@ def dynamic(block, end_time=None):
 
                     if block.m[pt] != desired:
                         block.change(pt)
+                        changed.append((x, y))
             break
     else:
         print>>sys.stderr, 'crucial states were truncated :('
-        return
+        return []
         assert False
 
     delta = block.get_score() - initial_score
-    print>>sys.stderr, 'delta', delta
+    print>>sys.stderr, 'delta', delta, len(changed), 'points changed'
     if delta < 0:
         print>>sys.stderr, '!'*10
     #assert delta >= 0
+
+    return changed
 
 
 class FixTheFence(object):
