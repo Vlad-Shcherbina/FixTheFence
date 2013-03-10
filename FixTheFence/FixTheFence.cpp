@@ -7,10 +7,15 @@
 #include <map>
 #include <algorithm>
 #include <iterator>
+#include <ctime>
 
 #include "consts.h"
 
 using namespace std;
+
+
+const float TIME_LIMIT = 9.5;
+
 
 typedef int Goal;
 
@@ -113,6 +118,17 @@ public:
 		}
 		finish = xy;
 		return path;
+	}
+
+	void transpose() {
+		assert(w == h);
+		for (int y = -1; y <= h; y++)
+			for (int x = -1; x < y; x++) {
+				int pt1 = coords_to_index(x, y);
+				int pt2 = coords_to_index(y, x);
+				bool tm = m[pt1]; m[pt1] = m[pt2]; m[pt2] = tm;
+				Goal tg = goal[pt1]; goal[pt1] = goal[pt2]; goal[pt2] = tg;
+			}
 	}
 };
 
@@ -458,7 +474,7 @@ void dynamic(const Block &block) {
 		Bits bits = 0;
 
 		Cost cost = it->second.first;
-		cerr << "found solution of cost " << cost << endl;
+		//cerr << "found solution of cost " << cost << endl;
 
 		vector<Bits> reversed_solution;
 		sol = sol->next;
@@ -467,7 +483,6 @@ void dynamic(const Block &block) {
 			sol = sol->next;
 		}
 		vector<Bits> solution(reversed_solution.rbegin(), reversed_solution.rend());
-		cerr << solution.size() << endl;
 		assert(solution.size() == block.h);
 
 		for (int y = 0; y < block.h; y++) {
@@ -492,6 +507,7 @@ void dynamic(const Block &block) {
 class FixTheFence {
 public:
 	string findLoop(vector<string> data) {
+		clock_t end_time = clock() + CLOCKS_PER_SEC * TIME_LIMIT;
 		init();
 		Block whole = Block(STRIDE+1, data.size(), data.size());
 		for (int y = 0; y < data.size(); y++)
@@ -509,9 +525,33 @@ public:
 			m[pt] = true;
 		}
 
-		Block block = whole.get_subblock(4, 0, 8, whole.h);
-		dynamic(block);
-		whole.show();
+		const int strip_width = 5;
+
+
+		bool transposed = false;
+
+		int cnt = 0;
+
+		while (true) {
+			for (int i = 0; i+strip_width <= whole.w; i += 2) {
+				if (clock() > end_time)
+					break;
+				Block block = whole.get_subblock(i, 0, i+strip_width, whole.h);
+				//cerr << "*** " << i << endl;
+				dynamic(block);
+				cnt++;
+			}
+			if (clock() > end_time)
+				break;
+			whole.transpose();
+			transposed = !transposed;
+		}
+
+		if (transposed)
+			whole.transpose();
+
+		cerr << cnt << " dynamics were performed" << endl;
+		//whole.show();
 
 		for (int pt = 0; ; pt++)
 			if (m[pt]) {
