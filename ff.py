@@ -284,6 +284,11 @@ OUT = object()
 BARRIER = object()
 GATE_NAME = {None: None, IN: 'IN', OUT: 'OUT', BARRIER: 'BARRIER'}
 
+GATE_PAIRS = [
+    (None, None), (None, IN), (None, OUT), (IN, None), (OUT, None),
+    (IN, IN), (IN, OUT), (OUT, IN), (OUT, OUT),
+    (BARRIER, BARRIER)]
+
 class Propagator(object):
     def __init__(self, h):
         start = time.clock()
@@ -526,11 +531,8 @@ class Propagator(object):
 
     def enumerate_transitions(self, topo):
         bits = self.bits_from_topo(topo)
-        gate_pairs = [
-            (None, None), (None, IN), (None, OUT), (IN, None), (OUT, None),
-            (IN, IN), (IN, OUT), (OUT, IN), (OUT, OUT),
-            (BARRIER, BARRIER)]
-        for up_gate, down_gate in gate_pairs:
+
+        for up_gate, down_gate in GATE_PAIRS:
             for xor_bits in range(0, 2 << self.h, 2):
                 if up_gate is not None:
                     xor_bits |= 1
@@ -848,7 +850,7 @@ class FixTheFence(object):
                 if time.clock() > start + TIME_LIMIT:
                     break
                 sub = whole.get_subblock(0, y, whole.w, y+STRIP_WIDTH)
-                dynamic(sub, end_time=start + TIME_LIMIT)
+                dynamic(sub, sameness_bonus=0, end_time=start + TIME_LIMIT)
             whole.transpose()
             transposed = not transposed
 

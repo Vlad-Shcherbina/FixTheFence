@@ -4,6 +4,11 @@
 #include <vector>
 #include <utility>
 #include <sstream>
+#include <map>
+#include <algorithm>
+#include <iterator>
+
+#include "consts.h"
 
 using namespace std;
 
@@ -105,18 +110,66 @@ public:
 };
 
 
-void clear() {
+typedef int Gate;
+typedef pair<Gate, Gate> GatePair;
+
+const Gate NONE = 0;
+const Gate IN = 1;
+const Gate OUT = 2;
+const Gate BARRIER = 3;
+
+typedef int Topo;
+typedef unsigned int Bits;
+
+GatePair GATE_PAIRS[] = {
+    GatePair(NONE, NONE), GatePair(NONE, IN), GatePair(NONE, OUT), GatePair(IN, NONE), GatePair(OUT, NONE),
+    GatePair(IN, IN), GatePair(IN, OUT), GatePair(OUT, IN), GatePair(OUT, OUT),
+	GatePair(BARRIER, BARRIER)};
+const int NUM_GATE_PAIRS = sizeof GATE_PAIRS / sizeof GATE_PAIRS[0];
+
+class Propagator {
+public:
+	int w;
+	int num_topos;
+	vector<map<GatePair, vector<pair<Bits, Topo> > > > transitions;
+	Propagator() {}
+	Propagator(int w, int num_topos, const unsigned transition_data[], const int transitions_starts[]) {
+		this->w = w;
+		this->num_topos = num_topos;
+		transitions.resize(num_topos);
+		const int *start = transitions_starts;
+		for (int i = 0; i < num_topos; i++) {
+			for (int j = 0; j < NUM_GATE_PAIRS; j++) {
+				vector<pair<Bits, Topo> > &ts = transitions[i][GATE_PAIRS[j]];
+				for (int k = start[0]; k < start[1]; k++) {
+					Bits bits = transition_data[k] & 255;
+					Topo new_topo = transition_data[k] >> 8;
+					ts.push_back(make_pair(bits, new_topo));
+				}
+				start++;
+			}
+		}
+		assert(transition_data[start[0]] == 42);
+	}
+};
+
+map<int, Propagator> propagators;
+
+void init() {
 	for (int i = 0; i < sizeof m / sizeof m[0]; i++) {
 		m[i] = false;
 		goal[i] = NO_GOAL;
 	}
+	if (propagators.empty()) {
+		propagators[4] = Propagator(4, NUM_TOPOS_4, transition_data_4, transition_starts_4);
+		propagators[5] = Propagator(5, NUM_TOPOS_5, transition_data_5, transition_starts_5);
+	}
 }
-
 
 class FixTheFence {
 public:
 	string findLoop(vector<string> data) {
-		clear();
+		init();
 		Block whole = Block(STRIDE+1, data.size(), data.size());
 		for (int y = 0; y < data.size(); y++)
 			for (int x = 0; x < data.size(); x++) {
@@ -133,7 +186,7 @@ public:
 			m[pt] = true;
 		}
 
-		whole.show();
+		//whole.show();
 
 		for (int pt = 0; ; pt++)
 			if (m[pt]) {
