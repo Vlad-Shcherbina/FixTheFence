@@ -11,6 +11,10 @@ with open(CONSTS_FILE, 'w') as consts:
         prop = Propagator(i)
         assert all(t is None for t in prop.index_topo[0])
         print>>consts, 'const int NUM_TOPOS_%d = %d;' % (prop.h, len(prop.index_topo))
+        print>>consts, 'const unsigned topo_bits_%d[] = {' % prop.h
+        print>>consts, ', '.join(map(str, prop.topo_bits))
+        print>>consts, '};'
+
         print>>consts, 'const unsigned transition_data_%d[] = {' % prop.h
         position = 0
         starts = []

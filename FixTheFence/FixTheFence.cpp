@@ -12,10 +12,11 @@
 
 using namespace std;
 
+typedef int Goal;
 
 const int STRIDE = 256;
 const int MAX_SIZE = 100;
-const int NO_GOAL = 5;
+const Goal NO_GOAL = 5;
 
 const int UP = -STRIDE;
 const int DOWN = STRIDE;
@@ -24,7 +25,7 @@ const int RIGHT = 1;
 
 
 bool m[STRIDE*(MAX_SIZE+2)] = {false};
-int goal[STRIDE*(MAX_SIZE+2)];
+Goal goal[STRIDE*(MAX_SIZE+2)];
 
 
 typedef pair<int, int> Coords;
@@ -137,11 +138,17 @@ class Propagator {
 public:
 	int w;
 	int num_topos;
+	const Bits *topo_bits;
 	vector<map<GatePair, vector<pair<Bits, Topo> > > > transitions;
 	Propagator() {}
-	Propagator(int w, int num_topos, const unsigned transition_data[], const int transitions_starts[]) {
+	Propagator(
+			int w, int num_topos,
+			const unsigned topo_bits[],
+			const unsigned transition_data[],
+			const int transitions_starts[]) {
 		this->w = w;
 		this->num_topos = num_topos;
+		this->topo_bits = topo_bits;
 		transitions.resize(num_topos);
 		const int *start = transitions_starts;
 		for (int i = 0; i < num_topos; i++) {
@@ -167,8 +174,8 @@ void init() {
 		goal[i] = NO_GOAL;
 	}
 	if (propagators.empty()) {
-		propagators[4] = Propagator(4, NUM_TOPOS_4, transition_data_4, transition_starts_4);
-		propagators[5] = Propagator(5, NUM_TOPOS_5, transition_data_5, transition_starts_5);
+		propagators[4] = Propagator(4, NUM_TOPOS_4, topo_bits_4, transition_data_4, transition_starts_4);
+		propagators[5] = Propagator(5, NUM_TOPOS_5, topo_bits_5, transition_data_5, transition_starts_5);
 	}
 }
 
@@ -211,6 +218,267 @@ map<Coords, Coords> compute_paths(const Block &block) {
 }
 
 
+struct Node {
+	Bits data;
+	int refcount;
+	Node *next;
+};
+
+Node *free_node = NULL;
+
+void incref(Node *node) {
+	node->refcount++;
+}
+
+void decref(Node *node) {
+	while (--node->refcount == 0) {
+		Node *t = node->next;
+		node->next = free_node;
+		free_node = node;
+		node = t;
+		if (node == NULL)
+			return;
+	}
+}
+
+Node *new_node() {
+	if (free_node == NULL) {
+		cerr << "allocating another chunk of nodes" << endl;
+		const int n = 1024;
+		Node *nodes = new Node[n];
+		for (int i = 0; i < n-1; i++)
+			nodes[i].next = &nodes[i+1];
+		nodes[n-1].next = NULL;
+		free_node = &nodes[0];
+	}
+	Node *node = free_node;
+	free_node = free_node->next;
+	node->refcount = 1;
+	node->next = NULL;
+	return node;
+}
+
+
+int num_bits(Bits x) {
+	int result = 0;
+	while (x) {
+		x &= x-1;
+		result++;
+	}
+	return result;
+}
+
+
+typedef unsigned State;
+typedef int Cost;
+
+typedef map<State, pair<Cost, Node*> > StatesCut;
+
+
+void dynamic(const Block &block) {
+	map<Coords, Coords> paths = compute_paths(block);
+	if (paths.empty()) {
+		cerr << "block with no ins and outs" << endl;
+		return;
+	}
+	Topo start_topo = 0;
+	Topo finish_topo = 0;
+	Bits start_bonus = 0;
+	Bits start_penalty = 0;
+
+	assert(propagators.find(block.w) != propagators.end());
+	Propagator &prop = propagators[block.w];
+
+	vector<GatePair> gate_pairs;
+	for (int y = 0; y <= block.h; y++) {
+		Gate left_gate = NONE, right_gate = NONE;
+		if (paths.find(Coords(-1, y)) != paths.end()) {
+			Coords end = paths[Coords(-1, y)];
+			if (end.second < y)
+				left_gate = OUT;
+			else if (end.second > y)
+				left_gate = IN;
+			else
+				left_gate = BARRIER;
+		}
+		if (paths.find(Coords(block.w+1, y)) != paths.end()) {
+			Coords end = paths[Coords(block.w+1, y)];
+			if (end.second < y)
+				right_gate = OUT;
+			else if (end.second > y)
+				right_gate = IN;
+			else
+				right_gate = BARRIER;
+		}
+		gate_pairs.push_back(make_pair(left_gate, right_gate));
+	}
+	
+	vector<StatesCut> states(2);
+	Node *empty_sol = new_node();
+	empty_sol->data = 0;
+	states[0][0] = make_pair(0, empty_sol);
+
+	for (int y = 0; y <= block.h; y++) {
+		StatesCut &cur_states = states[y%2];
+		StatesCut &next_states = states[(y+1)%2];
+
+		bool left_bonus = false;
+		bool left_penalty = false;
+		int pt = block.coords_to_index(-1, y-1);
+		Goal g = goal[pt];
+		if (g != NO_GOAL) {
+			int num_neighbors = 0;
+			if (m[pt] != m[pt-STRIDE]) num_neighbors++;
+			if (m[pt] != m[pt+STRIDE]) num_neighbors++;
+			if (m[pt] != m[pt-1]) num_neighbors++;
+			if (num_neighbors == g)
+				left_penalty = true;
+			else if (num_neighbors+1 == g)
+				left_bonus = true;
+		}
+
+		bool right_bonus = false;
+		bool right_penalty = false;
+		pt = block.coords_to_index(block.w, y-1);
+		g = goal[pt];
+		if (g != NO_GOAL) {
+			int num_neighbors = 0;
+			if (m[pt] != m[pt-STRIDE]) num_neighbors++;
+			if (m[pt] != m[pt+STRIDE]) num_neighbors++;
+			if (m[pt] != m[pt+1]) num_neighbors++;
+			if (num_neighbors == g)
+				right_penalty = true;
+			else if (num_neighbors+1 == g)
+				right_bonus = true;
+		}
+
+		Bits goal0 = 0, goal1 = 0, goal2 = 0, goal3 = 0;
+		for (int x = 0; x < block.w; x++) {
+			Goal g = goal[block.coords_to_index(x, y)];
+			if (g == 0)
+				goal0 |= 2 << x;
+			else if (g == 1)
+				goal1 |= 2 << x;
+			else if (g == 2)
+				goal2 |= 2 << x;
+			else if (g == 3)
+				goal3 |= 2 << x;
+		}
+		
+		for (StatesCut::iterator it = cur_states.begin(); it != cur_states.end(); ++it) {
+			State state = it->first;
+			Topo topo = state >> 16;
+			Bits bonus = (state >> 8) & 255;
+			Bits penalty = state & 255;
+			Bits bits = prop.topo_bits[topo];
+			Node *sol = it->second.second;
+
+			Cost cost = it->second.first;
+
+			if (left_bonus)
+				if ((bits ^ (bits >> 1)) & 1)
+					cost += 1;
+			if (left_penalty)
+				if (!((bits ^ (bits >> 1)) & 1))
+					cost += 1;
+			if (right_bonus)
+				if ((bits ^ (bits >> 1)) & (1 << block.w))
+					cost += 1;
+			if (right_penalty)
+				if (!((bits ^ (bits >> 1)) & (1 << block.w)))
+					cost += 1;
+			
+			vector<pair<Bits, Topo> > &zzz = prop.transitions[topo][gate_pairs[y]];
+			for (vector<pair<Bits, Topo> >::iterator new_it = zzz.begin(); new_it != zzz.end(); new_it++) {
+				Bits xor_bits = new_it->first;
+				Topo new_topo = new_it->second;
+				Cost new_cost = cost;
+				new_cost += num_bits(xor_bits & bonus);
+				new_cost += num_bits((~xor_bits) & penalty);
+				
+				Bits new_bits = bits ^ xor_bits;
+
+				Bits neib_up = new_bits ^ (new_bits << 1);
+                Bits neib_down = neib_up >> 1;
+                Bits neib_left = xor_bits;
+
+                Bits n0 = ~neib_left;
+                Bits n1 = neib_left;
+
+                Bits n2 = n1 & neib_up;
+                n1 = (n1 & ~neib_up) | (n0 & neib_up);
+                n0 &= ~neib_up;
+
+                Bits n3 = n2 & neib_down;
+                n2 = (n2 & ~neib_down) | (n1 & neib_down);
+                n1 = (n1 & ~neib_down) | (n0 & neib_down);
+                n0 &= ~neib_down;
+				
+				Bits new_bonus = (n0 & goal1) | (n1 & goal2) | (n2 & goal3);
+                Bits new_penalty = (n0 & goal0) | (n1 & goal1) | (n2 & goal2) | (n3 & goal3);
+
+				State new_state = (new_topo << 16) | (new_bonus << 8) | new_penalty;
+				
+				if (next_states.find(new_state) == next_states.end()) {
+					next_states[new_state] = make_pair(-1, (Node*)NULL);
+				}
+				if (new_cost > next_states[new_state].first) {
+					Node *node = new_node();
+					node->data = xor_bits;
+					node->next = sol;
+					incref(sol);
+					Node *old_solution = next_states[new_state].second;
+					if (old_solution != NULL)
+						decref(old_solution);
+					next_states[new_state] = make_pair(new_cost, node);
+				}
+			}
+		}
+		cur_states.clear();
+	}
+
+	StatesCut &final_states = states[(block.h+1)%2];
+	for (StatesCut::iterator it = final_states.begin(); it != final_states.end(); ++it) {
+		State state = it->first;
+		Topo topo = state >> 16;
+		if (topo != 0) continue;
+
+		Bits bonus = (state >> 8) & 255;
+		Bits penalty = state & 255;
+
+		assert(bonus == 0);
+		assert(penalty == 0);
+
+		Node *sol = it->second.second;
+
+		Bits bits = 0;
+
+		Cost cost = it->second.first;
+		cerr << "found solution of cost " << cost << endl;
+
+		vector<Bits> reversed_solution;
+		sol = sol->next;
+		while (sol->next != NULL) {
+			reversed_solution.push_back(sol->data);
+			sol = sol->next;
+		}
+		vector<Bits> solution(reversed_solution.rbegin(), reversed_solution.rend());
+		cerr << solution.size() << endl;
+		assert(solution.size() == block.h);
+
+		for (int y = 0; y < block.h; y++) {
+			bits ^= solution[y];
+			for (int x = 0; x < block.w; x++) {
+				bool desired = (bits & (2 << x)) ? true : false;
+				int pt = block.coords_to_index(x, y);
+				if (m[pt] != desired)
+					m[pt] = desired;
+			}
+		}
+	}
+}
+
+
 class FixTheFence {
 public:
 	string findLoop(vector<string> data) {
@@ -226,12 +494,14 @@ public:
 					goal[pt] = c - '0';
 			}
 
-		for (int y = 0; y < whole.h; y++) {
-			int pt = whole.coords_to_index(whole.w/2, y);
+		for (int x = 0; x < whole.w; x++) {
+			int pt = whole.coords_to_index(x, whole.h/2);
 			m[pt] = true;
 		}
 
-		//whole.show();
+		Block block = whole.get_subblock(4, 0, 8, whole.h);
+		dynamic(block);
+		whole.show();
 
 		for (int pt = 0; ; pt++)
 			if (m[pt]) {
