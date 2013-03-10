@@ -291,7 +291,13 @@ int num_bits(Bits x) {
 typedef unsigned State;
 typedef int Cost;
 
-typedef map<State, pair<Cost, Node*> > StatesCut;
+struct Entry {
+	State state;
+	Cost cost;
+	Node *solution;
+};
+
+typedef vector<Entry> StatesCut;
 
 
 void dynamic(const Block &block) {
@@ -347,11 +353,16 @@ void dynamic(const Block &block) {
 		}
 	}
 
-	
-	vector<StatesCut> states(2);
+	Entry empty_entry;
+	empty_entry.solution = NULL;
+	empty_entry.cost = -1;
+
+	vector<StatesCut> states(2, StatesCut(2001, empty_entry));
 	Node *empty_sol = new_node();
 	empty_sol->data = 0;
-	states[0][0] = make_pair(0, empty_sol);
+	states[0][0].cost = 0;
+	states[0][0].solution = empty_sol;
+	states[0][0].state = 0;
 
 	for (int y = 0; y <= block.h; y++) {
 		StatesCut &cur_states = states[y%2];
@@ -401,14 +412,16 @@ void dynamic(const Block &block) {
 		}
 		
 		for (StatesCut::iterator it = cur_states.begin(); it != cur_states.end(); ++it) {
-			State state = it->first;
+			Cost cost = it->cost;
+			if (cost == -1)
+				continue;
+			Node *sol = it->solution;
+			State state = it->state;
 			Topo topo = state >> 16;
 			Bits bonus = (state >> 8) & 255;
 			Bits penalty = state & 255;
 			Bits bits = prop.topo_bits[topo];
-			Node *sol = it->second.second;
 
-			Cost cost = it->second.first;
 
 			if (left_bonus)
 				if ((bits ^ (bits >> 1)) & 1)
@@ -456,31 +469,35 @@ void dynamic(const Block &block) {
 
 				State new_state = (new_topo << 16) | (new_bonus << 8) | new_penalty;
 				
-				if (next_states.find(new_state) == next_states.end()) {
-					next_states[new_state] = make_pair(-1, (Node*)NULL);
-				}
-				if (new_cost > next_states[new_state].first) {
+				Entry &new_entry = next_states[(new_state * 119) % next_states.size()];
+
+				if (new_cost > new_entry.cost) {
 					Node *node = new_node();
 					node->data = xor_bits;
 					node->next = sol;
 					incref(sol);
-					Node *old_solution = next_states[new_state].second;
+					Node *old_solution = new_entry.solution;
 					if (old_solution != NULL)
 						decref(old_solution);
-					next_states[new_state] = make_pair(new_cost, node);
+					new_entry.cost = new_cost;
+					new_entry.state = new_state;
+					new_entry.solution = node;
 				}
 			}
 		}
 		for (StatesCut::iterator it = cur_states.begin(); it != cur_states.end(); ++it) {
-			Node *sol = it->second.second;
-			decref(sol);
+			Node *sol = it->solution;
+			if (sol != NULL)
+				decref(sol);
+			it->solution = NULL;
+			it->cost = -1;
 		}
-		cur_states.clear();
+		//cur_states.clear();
 	}
 
 	StatesCut &final_states = states[(block.h+1)%2];
 	for (StatesCut::iterator it = final_states.begin(); it != final_states.end(); ++it) {
-		State state = it->first;
+		State state = it->state;
 		Topo topo = state >> 16;
 		if (topo != 0) continue;
 
@@ -490,11 +507,11 @@ void dynamic(const Block &block) {
 		assert(bonus == 0);
 		assert(penalty == 0);
 
-		Node *sol = it->second.second;
+		Node *sol = it->solution;
 
 		Bits bits = 0;
 
-		Cost cost = it->second.first;
+		Cost cost = it->cost;
 		//cerr << "found solution of cost " << cost << endl;
 
 		vector<Bits> reversed_solution;
@@ -519,8 +536,9 @@ void dynamic(const Block &block) {
 	}
 
 	for (StatesCut::iterator it = final_states.begin(); it != final_states.end(); ++it) {
-		Node *sol = it->second.second;
-		decref(sol);
+		Node *sol = it->solution;
+		if (sol != NULL)
+			decref(sol);
 	}
 }
 
