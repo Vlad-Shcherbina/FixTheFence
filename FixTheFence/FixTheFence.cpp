@@ -156,6 +156,7 @@ public:
 	int num_topos;
 	const Bits *topo_bits;
 	vector<map<GatePair, vector<pair<Bits, Topo> > > > transitions;
+	vector<map<GatePair, vector<Topo> > > back_transitions;
 	Propagator() {}
 	Propagator(
 			int w, int num_topos,
@@ -166,6 +167,7 @@ public:
 		this->num_topos = num_topos;
 		this->topo_bits = topo_bits;
 		transitions.resize(num_topos);
+		back_transitions.resize(num_topos);
 		const int *start = transitions_starts;
 		for (int i = 0; i < num_topos; i++) {
 			for (int j = 0; j < NUM_GATE_PAIRS; j++) {
@@ -174,6 +176,7 @@ public:
 					Bits bits = transition_data[k] & 255;
 					Topo new_topo = transition_data[k] >> 8;
 					ts.push_back(make_pair(bits, new_topo));
+					back_transitions[new_topo][GATE_PAIRS[j]].push_back(i);
 				}
 				start++;
 			}
@@ -328,6 +331,22 @@ void dynamic(const Block &block) {
 		}
 		gate_pairs.push_back(make_pair(left_gate, right_gate));
 	}
+
+	static bool reachable[MAX_SIZE+1][NUM_TOPOS_5];
+	for (int i = 1; i < prop.num_topos; i++)
+		reachable[block.h][i] = false;
+	reachable[block.h][0] = true;
+	for (int y = block.h-1; y >= 0; y--) {
+		for (int i = 0; i < prop.num_topos; i++)
+			reachable[y][i] = false;
+		for (int i = 0; i < prop.num_topos; i++) {
+			if (!reachable[y+1][i]) continue;
+			vector<Topo> &back = prop.back_transitions[i][gate_pairs[y+1]];
+			for (int j = 0; j < back.size(); j++)
+				reachable[y][back[j]] = true;
+		}
+	}
+
 	
 	vector<StatesCut> states(2);
 	Node *empty_sol = new_node();
@@ -406,8 +425,10 @@ void dynamic(const Block &block) {
 			
 			vector<pair<Bits, Topo> > &zzz = prop.transitions[topo][gate_pairs[y]];
 			for (vector<pair<Bits, Topo> >::iterator new_it = zzz.begin(); new_it != zzz.end(); new_it++) {
-				Bits xor_bits = new_it->first;
 				Topo new_topo = new_it->second;
+				if (!reachable[y][new_topo])
+					continue;
+				Bits xor_bits = new_it->first;
 				Cost new_cost = cost;
 				new_cost += num_bits(xor_bits & bonus);
 				new_cost += num_bits((~xor_bits) & penalty);
