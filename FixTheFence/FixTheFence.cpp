@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <iterator>
 #include <ctime>
+#include <cstdlib>
+#include <fstream>
 
 #include "consts.h"
 
@@ -572,11 +574,17 @@ public:
 		int cnt = 0;
 
 		while (true) {
-			for (int i = 0; i+strip_width <= whole.w; i += 2) {
+			Block block = whole.get_subblock(0, 0, strip_width, whole.h);
+			dynamic(block);
+			block = whole.get_subblock(whole.w-strip_width, 0, whole.w, whole.h);
+			dynamic(block);
+			cnt += 2;
+
+			for (int i = 0; i+strip_width <= whole.w; i += 1) {
+				int j = rand() % (whole.w - strip_width+1);
 				if (clock() > end_time)
 					break;
-				Block block = whole.get_subblock(i, 0, i+strip_width, whole.h);
-				//cerr << "*** " << i << endl;
+				Block block = whole.get_subblock(j, 0, j+strip_width, whole.h);
 				dynamic(block);
 				cnt++;
 			}
@@ -612,16 +620,19 @@ public:
 
 int main(int argc, char* argv[])
 {
-	int n;
+	istream &in = cin;
+	//ifstream in = ifstream("..\\hz.txt"); assert(in.good());
 
-	cin >> n;
+	int n;
+	in >> n;
+	cerr << n << endl;
 	char s[256];
-	cin.getline(s, sizeof s);
+	in.getline(s, sizeof s);
 	assert(s == string(""));
 
 	vector<string> data;
 	for (int y = 0; y < n; y++) {
-		cin.getline(s, sizeof s);
+		in.getline(s, sizeof s);
 		data.push_back(s);
 	}
 
