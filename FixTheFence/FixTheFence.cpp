@@ -38,15 +38,21 @@ public:
 
 	Block(int offset, int w, int h) : offset(offset), w(w), h(h) {}
 
-	inline int coords_to_index(int x, int y) {
+	Block get_subblock(int x1, int y1, int x2, int y2) const {
+		assert(0 <= x1 && x1 <= x2 && x2 <= w);
+		assert(0 <= y1 && y1 <= y2 && y2 <= h);
+		return Block(offset + x1 + y1 * STRIDE, x2-x1, y2-y1);
+	}
+
+	inline int coords_to_index(int x, int y) const {
 		return offset + x + STRIDE*y;
 	}
 
-	inline Coords index_to_coords(int pt) {
+	inline Coords index_to_coords(int pt) const {
 		return Coords(pt % STRIDE - offset % STRIDE, pt / STRIDE - offset / STRIDE);
 	}
 
-	void show() {
+	void show() const {
 		for (int y = 0; y < h; y++) {
 			for (int x = 0; x < h; x++) {
 				int pt = coords_to_index(x, y);
@@ -65,7 +71,7 @@ public:
 		}
 	}
 
-	string trace_path(int pt, int prev_d, Coords &finish) {
+	string trace_path(int pt, int prev_d, Coords &finish) const {
 		int start = pt;
 
 		string path;
@@ -165,6 +171,45 @@ void init() {
 		propagators[5] = Propagator(5, NUM_TOPOS_5, transition_data_5, transition_starts_5);
 	}
 }
+
+map<Coords, Coords> compute_paths(const Block &block) {
+	map<Coords, Coords> result;
+
+	for (int y = 0; y <= block.h; y++) {
+		int x = -1;
+		int pt = block.coords_to_index(x, y);
+		if (m[pt] != m[pt-STRIDE]) {
+			Coords endpoint;
+			block.trace_path(pt+1, RIGHT, endpoint);
+			result[Coords(x, y)] = endpoint;
+		}
+		x = block.w+1;
+		pt = block.coords_to_index(x, y);
+		if (m[pt-1] != m[pt-STRIDE-1]) {
+			Coords endpoint;
+			block.trace_path(pt-1, LEFT, endpoint);
+			result[Coords(x, y)] = endpoint;
+		}
+	}
+	for (int x = 0; x <= block.w; x++) {
+		int y = -1;
+		int pt = block.coords_to_index(x, y);
+		if (m[pt] != m[pt-1]) {
+			Coords endpoint;
+			block.trace_path(pt+STRIDE, DOWN, endpoint);
+			result[Coords(x, y)] = endpoint;
+		}
+		y = block.h+1;
+		pt = block.coords_to_index(x, y);
+		if (m[pt-STRIDE] != m[pt-STRIDE-1]) {
+			Coords endpoint;
+			block.trace_path(pt-STRIDE, UP, endpoint);
+			result[Coords(x, y)] = endpoint;
+		}
+	}
+	return result;
+}
+
 
 class FixTheFence {
 public:
