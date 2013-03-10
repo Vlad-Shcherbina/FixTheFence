@@ -244,7 +244,7 @@ void decref(Node *node) {
 Node *new_node() {
 	if (free_node == NULL) {
 		cerr << "allocating another chunk of nodes" << endl;
-		const int n = 1024;
+		const int n = 4096;
 		Node *nodes = new Node[n];
 		for (int i = 0; i < n-1; i++)
 			nodes[i].next = &nodes[i+1];
@@ -434,6 +434,10 @@ void dynamic(const Block &block) {
 				}
 			}
 		}
+		for (StatesCut::iterator it = cur_states.begin(); it != cur_states.end(); ++it) {
+			Node *sol = it->second.second;
+			decref(sol);
+		}
 		cur_states.clear();
 	}
 
@@ -475,6 +479,12 @@ void dynamic(const Block &block) {
 					m[pt] = desired;
 			}
 		}
+		break;
+	}
+
+	for (StatesCut::iterator it = final_states.begin(); it != final_states.end(); ++it) {
+		Node *sol = it->second.second;
+		decref(sol);
 	}
 }
 
