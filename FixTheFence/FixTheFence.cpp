@@ -163,27 +163,28 @@ public:
 	Propagator(
 			int w, int num_topos,
 			const unsigned topo_bits[],
-			const unsigned transition_data[],
-			const int transitions_starts[]) {
+			const char *transition_data[]) {
 		this->w = w;
 		this->num_topos = num_topos;
 		this->topo_bits = topo_bits;
 		transitions.resize(num_topos);
 		back_transitions.resize(num_topos);
-		const int *start = transitions_starts;
 		for (int i = 0; i < num_topos; i++) {
 			for (int j = 0; j < NUM_GATE_PAIRS; j++) {
 				vector<pair<Bits, Topo> > &ts = transitions[i][GATE_PAIRS[j]];
-				for (int k = start[0]; k < start[1]; k++) {
-					Bits bits = transition_data[k] & 255;
-					Topo new_topo = transition_data[k] >> 8;
+				for (const char *p = transition_data[i*NUM_GATE_PAIRS+j]; *p; p += 3) {
+					Bits bits = (p[0]-40) << 1;
+					if (GATE_PAIRS[j].first != NONE)
+						bits |= 1;
+					if (GATE_PAIRS[j].second != NONE)
+						bits |= 2 << w;
+
+					Topo new_topo = (p[1] - 40)*64 + p[2] - 40;
 					ts.push_back(make_pair(bits, new_topo));
 					back_transitions[new_topo][GATE_PAIRS[j]].push_back(i);
 				}
-				start++;
 			}
 		}
-		assert(transition_data[start[0]] == 42);
 	}
 };
 
@@ -195,8 +196,8 @@ void init() {
 		goal[i] = NO_GOAL;
 	}
 	if (propagators.empty()) {
-		propagators[4] = Propagator(4, NUM_TOPOS_4, topo_bits_4, transition_data_4, transition_starts_4);
-		propagators[5] = Propagator(5, NUM_TOPOS_5, topo_bits_5, transition_data_5, transition_starts_5);
+		propagators[4] = Propagator(4, NUM_TOPOS_4, topo_bits_4, transition_data_4);
+		propagators[5] = Propagator(5, NUM_TOPOS_5, topo_bits_5, transition_data_5);
 	}
 }
 

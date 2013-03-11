@@ -7,7 +7,7 @@ SUBMISSION_FILE = 'submission.cpp'
 
 
 with open(CONSTS_FILE, 'w') as consts:
-    for i in range(1, 6):
+    for i in range(1, 6+1):
         prop = Propagator(i)
         assert all(t is None for t in prop.index_topo[0])
         print>>consts, 'const int NUM_TOPOS_%d = %d;' % (prop.h, len(prop.index_topo))
@@ -15,22 +15,23 @@ with open(CONSTS_FILE, 'w') as consts:
         print>>consts, ', '.join(map(str, prop.topo_bits))
         print>>consts, '};'
 
-        print>>consts, 'const unsigned transition_data_%d[] = {' % prop.h
-        position = 0
-        starts = []
+        print>>consts, 'const char *transition_data_%d[] = {' % prop.h
         for i in range(len(prop.index_topo)):
             for gate_pair in GATE_PAIRS:
                 ts = prop.transition_table[i].get(gate_pair, {})
-                starts.append(position)
-                position += len(ts)
+                s = ''
                 for xor_bits, new_topo in ts.items():
-                    print>>consts, '%d,' % (xor_bits | (new_topo << 8)),
-                print>>consts
-        starts.append(position)
-        print>>consts, '42};'
-        print>>consts, 'const int transition_starts_%d[] = {' % prop.h
-        print>>consts, ', '.join(map(str, starts))
-        print>>consts, '};'
+                    assert new_topo < 64*64
+                    assert bool(xor_bits & 1) == (gate_pair[0] is not None)
+                    assert bool(xor_bits & (2 << prop.h)) == (gate_pair[1] is not None)
+                    xor_bits &= ~1
+                    xor_bits &= ~(2 << prop.h)
+                    xor_bits //= 2
+                    assert xor_bits < 64
+                    s += chr(xor_bits+40)
+                    s += chr(new_topo//64+40)+chr(new_topo%64+40)
+                print>>consts, '"%s",' % s.replace('\\', '\\\\')
+        print>>consts, '""};'
 
 
 text = open(SOURCE_FILE).read()
