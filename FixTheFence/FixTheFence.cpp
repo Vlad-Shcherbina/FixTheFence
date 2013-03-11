@@ -198,6 +198,7 @@ void init() {
 	if (propagators.empty()) {
 		propagators[4] = Propagator(4, NUM_TOPOS_4, topo_bits_4, transition_data_4);
 		propagators[5] = Propagator(5, NUM_TOPOS_5, topo_bits_5, transition_data_5);
+		propagators[6] = Propagator(6, NUM_TOPOS_6, topo_bits_6, transition_data_6);
 	}
 }
 
@@ -303,7 +304,7 @@ struct Entry {
 typedef vector<Entry> StatesCut;
 
 
-void dynamic(const Block &block) {
+void dynamic(const Block &block, int hashtable_size=2001) {
 	map<Coords, Coords> paths = compute_paths(block);
 	if (paths.empty()) {
 		cerr << "block with no ins and outs" << endl;
@@ -341,7 +342,7 @@ void dynamic(const Block &block) {
 		gate_pairs.push_back(make_pair(left_gate, right_gate));
 	}
 
-	static bool reachable[MAX_SIZE+1][NUM_TOPOS_5];
+	static bool reachable[MAX_SIZE+1][NUM_TOPOS_6];
 	for (int i = 1; i < prop.num_topos; i++)
 		reachable[block.h][i] = false;
 	reachable[block.h][0] = true;
@@ -360,7 +361,7 @@ void dynamic(const Block &block) {
 	empty_entry.solution = NULL;
 	empty_entry.cost = -1;
 
-	vector<StatesCut> states(2, StatesCut(2001, empty_entry));
+	vector<StatesCut> states(2, StatesCut(hashtable_size, empty_entry));
 	Node *empty_sol = new_node();
 	empty_sol->data = 0;
 	states[0][0].cost = 0;
@@ -501,6 +502,8 @@ void dynamic(const Block &block) {
 	StatesCut &final_states = states[(block.h+1)%2];
 	for (StatesCut::iterator it = final_states.begin(); it != final_states.end(); ++it) {
 		State state = it->state;
+		Cost cost = it->cost;
+		if (cost == -1) continue;
 		Topo topo = state >> 16;
 		if (topo != 0) continue;
 
@@ -513,9 +516,6 @@ void dynamic(const Block &block) {
 		Node *sol = it->solution;
 
 		Bits bits = 0;
-
-		Cost cost = it->cost;
-		//cerr << "found solution of cost " << cost << endl;
 
 		vector<Bits> reversed_solution;
 		sol = sol->next;
@@ -567,19 +567,24 @@ public:
 			m[pt] = true;
 		}
 
-		const int strip_width = 5;
-
+		const int strip_width = 6;
 
 		bool transposed = false;
 
 		int cnt = 0;
 
 		while (true) {
+			if (clock() > end_time)
+				break;
 			Block block = whole.get_subblock(0, 0, strip_width, whole.h);
 			dynamic(block);
+			cnt++;
+
+			if (clock() > end_time)
+				break;
 			block = whole.get_subblock(whole.w-strip_width, 0, whole.w, whole.h);
 			dynamic(block);
-			cnt += 2;
+			cnt++;
 
 			for (int i = 0; i+strip_width <= whole.w; i += 1) {
 				int j = rand() % (whole.w - strip_width+1);
