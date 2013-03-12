@@ -195,11 +195,6 @@ void init() {
 		m[i] = false;
 		goal[i] = NO_GOAL;
 	}
-	if (propagators.empty()) {
-		propagators[4] = Propagator(4, NUM_TOPOS_4, topo_bits_4, transition_data_4);
-		propagators[5] = Propagator(5, NUM_TOPOS_5, topo_bits_5, transition_data_5);
-		propagators[6] = Propagator(6, NUM_TOPOS_6, topo_bits_6, transition_data_6);
-	}
 }
 
 map<Coords, Coords> compute_paths(const Block &block) {
@@ -304,7 +299,7 @@ struct Entry {
 typedef vector<Entry> StatesCut;
 
 
-void dynamic(const Block &block, int hashtable_size=2001) {
+void dynamic(const Block &block, int hashtable_size) {
 	map<Coords, Coords> paths = compute_paths(block);
 	if (paths.empty()) {
 		cerr << "block with no ins and outs" << endl;
@@ -414,7 +409,7 @@ void dynamic(const Block &block, int hashtable_size=2001) {
 			else if (g == 3)
 				goal3 |= 2 << x;
 		}
-		
+
 		for (StatesCut::iterator it = cur_states.begin(); it != cur_states.end(); ++it) {
 			Cost cost = it->cost;
 			if (cost == -1)
@@ -439,7 +434,7 @@ void dynamic(const Block &block, int hashtable_size=2001) {
 			if (right_penalty)
 				if (!((bits ^ (bits >> 1)) & (1 << block.w)))
 					cost += 1;
-			
+
 			vector<pair<Bits, Topo> > &zzz = prop.transitions[topo][gate_pairs[y]];
 			for (vector<pair<Bits, Topo> >::iterator new_it = zzz.begin(); new_it != zzz.end(); new_it++) {
 				Topo new_topo = new_it->second;
@@ -449,7 +444,7 @@ void dynamic(const Block &block, int hashtable_size=2001) {
 				Cost new_cost = cost;
 				new_cost += num_bits(xor_bits & bonus);
 				new_cost += num_bits((~xor_bits) & penalty);
-				
+
 				Bits new_bits = bits ^ xor_bits;
 
 				Bits neib_up = new_bits ^ (new_bits << 1);
@@ -467,12 +462,12 @@ void dynamic(const Block &block, int hashtable_size=2001) {
                 n2 = (n2 & ~neib_down) | (n1 & neib_down);
                 n1 = (n1 & ~neib_down) | (n0 & neib_down);
                 n0 &= ~neib_down;
-				
+
 				Bits new_bonus = (n0 & goal1) | (n1 & goal2) | (n2 & goal3);
                 Bits new_penalty = (n0 & goal0) | (n1 & goal1) | (n2 & goal2) | (n3 & goal3);
 
 				State new_state = (new_topo << 16) | (new_bonus << 8) | new_penalty;
-				
+
 				Entry &new_entry = next_states[(new_state * 119) % next_states.size()];
 
 				if (new_cost > new_entry.cost) {
@@ -547,9 +542,33 @@ void dynamic(const Block &block, int hashtable_size=2001) {
 
 
 class FixTheFence {
+	int strip_width;
+	int hashtable_size;
 public:
 	string findLoop(vector<string> data) {
 		clock_t end_time = clock() + CLOCKS_PER_SEC * TIME_LIMIT;
+
+		if (data.size() < 47) {
+			strip_width = 6;
+			hashtable_size = 4001;
+		}
+		else {
+			strip_width = 5;
+			hashtable_size = 1009;
+		}
+
+		switch (strip_width) {
+		case 4:
+			propagators[4] = Propagator(4, NUM_TOPOS_4, topo_bits_4, transition_data_4);
+			break;
+		case 5:
+			propagators[5] = Propagator(5, NUM_TOPOS_5, topo_bits_5, transition_data_5);
+			break;
+		case 6:
+			propagators[6] = Propagator(6, NUM_TOPOS_6, topo_bits_6, transition_data_6);
+			break;
+		}
+
 		init();
 		Block whole = Block(STRIDE+1, data.size(), data.size());
 		for (int y = 0; y < data.size(); y++)
@@ -563,11 +582,11 @@ public:
 			}
 
 		for (int x = 0; x < whole.w; x++) {
-			int pt = whole.coords_to_index(x, whole.h/2);
-			m[pt] = true;
+			for (int y = whole.h/3; y < 2*whole.h/3; y++) {
+				int pt = whole.coords_to_index(x, y);
+				m[pt] = true;
+			}
 		}
-
-		const int strip_width = 6;
 
 		bool transposed = false;
 
@@ -577,21 +596,21 @@ public:
 			if (clock() > end_time)
 				break;
 			Block block = whole.get_subblock(0, 0, strip_width, whole.h);
-			dynamic(block);
+			dynamic(block, hashtable_size);
 			cnt++;
 
 			if (clock() > end_time)
 				break;
 			block = whole.get_subblock(whole.w-strip_width, 0, whole.w, whole.h);
-			dynamic(block);
+			dynamic(block, hashtable_size);
 			cnt++;
 
-			for (int i = 0; i+strip_width <= whole.w; i += 1) {
+			for (int i = 0; i+strip_width <= whole.w; i++) {
 				int j = rand() % (whole.w - strip_width+1);
 				if (clock() > end_time)
 					break;
 				Block block = whole.get_subblock(j, 0, j+strip_width, whole.h);
-				dynamic(block);
+				dynamic(block, hashtable_size);
 				cnt++;
 			}
 			if (clock() > end_time)
