@@ -1,3 +1,5 @@
+#define NDEBUG
+
 #include <cassert>
 #include <iostream>
 #include <string>
@@ -16,7 +18,7 @@
 using namespace std;
 
 
-const float TIME_LIMIT = 9.5;
+const float TIME_LIMIT = 9.6;
 
 
 typedef int Goal;
@@ -546,6 +548,7 @@ class FixTheFence {
 	int hashtable_size;
 public:
 	string findLoop(vector<string> data) {
+		assert(false);
 		clock_t end_time = clock() + CLOCKS_PER_SEC * TIME_LIMIT;
 
 		if (data.size() < 47) {
@@ -582,7 +585,7 @@ public:
 			}
 
 		for (int x = 0; x < whole.w; x++) {
-			for (int y = whole.h/3; y < 2*whole.h/3; y++) {
+			for (int y = 1; y < whole.h-1; y++) {
 				int pt = whole.coords_to_index(x, y);
 				m[pt] = true;
 			}
@@ -605,8 +608,14 @@ public:
 			dynamic(block, hashtable_size);
 			cnt++;
 
-			for (int i = 0; i+strip_width <= whole.w; i++) {
-				int j = rand() % (whole.w - strip_width+1);
+			vector<int> xs(whole.w - strip_width + 1);
+			for (int i = 0; i < xs.size(); i++)
+				xs[i] = i;
+			for (int i = 1; i < xs.size(); i++)
+				swap(xs[i], xs[rand()%i]);
+			for (int i = 0; i < xs.size(); i++) {
+				int j = xs[i];
+				//cerr << j << endl;
 				if (clock() > end_time)
 					break;
 				Block block = whole.get_subblock(j, 0, j+strip_width, whole.h);
